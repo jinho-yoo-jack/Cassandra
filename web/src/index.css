@@ -1,0 +1,156 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@xyflow/react/dist/style.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: oklch(0.985 0.002 247);
+  --foreground: oklch(0.21 0.03 265);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.03 265);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.03 265);
+  --primary: oklch(0.51 0.19 263);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.96 0.006 250);
+  --secondary-foreground: oklch(0.25 0.03 265);
+  --muted: oklch(0.96 0.006 250);
+  --muted-foreground: oklch(0.52 0.03 257);
+  --accent: oklch(0.95 0.01 250);
+  --accent-foreground: oklch(0.25 0.03 265);
+  --destructive: oklch(0.58 0.22 27);
+  --border: oklch(0.91 0.01 255);
+  --input: oklch(0.91 0.01 255);
+  --ring: oklch(0.51 0.19 263);
+  --radius: 0.6rem;
+
+  --sev-critical: oklch(0.55 0.22 18);
+  --sev-high: oklch(0.65 0.19 42);
+  --sev-medium: oklch(0.77 0.15 80);
+  --sev-low: oklch(0.62 0.12 230);
+  --sev-none: oklch(0.7 0.02 250);
+  --canvas: oklch(0.975 0.004 250);
+}
+
+.dark {
+  --background: oklch(0.16 0.02 265);
+  --foreground: oklch(0.95 0.01 250);
+  --card: oklch(0.2 0.025 265);
+  --card-foreground: oklch(0.95 0.01 250);
+  --popover: oklch(0.21 0.025 265);
+  --popover-foreground: oklch(0.95 0.01 250);
+  --primary: oklch(0.67 0.17 258);
+  --primary-foreground: oklch(0.16 0.02 265);
+  --secondary: oklch(0.26 0.025 265);
+  --secondary-foreground: oklch(0.95 0.01 250);
+  --muted: oklch(0.26 0.025 265);
+  --muted-foreground: oklch(0.7 0.02 255);
+  --accent: oklch(0.28 0.03 265);
+  --accent-foreground: oklch(0.95 0.01 250);
+  --destructive: oklch(0.65 0.2 25);
+  --border: oklch(0.3 0.025 265);
+  --input: oklch(0.3 0.025 265);
+  --ring: oklch(0.67 0.17 258);
+
+  --sev-critical: oklch(0.66 0.21 18);
+  --sev-high: oklch(0.72 0.17 45);
+  --sev-medium: oklch(0.82 0.14 85);
+  --sev-low: oklch(0.7 0.11 230);
+  --sev-none: oklch(0.55 0.02 250);
+  --canvas: oklch(0.18 0.02 265);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sev-critical: var(--sev-critical);
+  --color-sev-high: var(--sev-high);
+  --color-sev-medium: var(--sev-medium);
+  --color-sev-low: var(--sev-low);
+  --color-sev-none: var(--sev-none);
+  --color-canvas: var(--canvas);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+/* React Flow follows the app theme. */
+.react-flow {
+  --xy-background-color: var(--canvas);
+  --xy-edge-stroke: color-mix(in oklch, var(--muted-foreground) 45%, transparent);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-minimap-background-color: var(--card);
+}
+
+/* Generated docs rendered from markdown. */
+.markdown {
+  @apply mt-3 space-y-3 text-sm leading-relaxed;
+}
+.markdown h1 {
+  @apply text-xl font-semibold;
+}
+.markdown h2 {
+  @apply mt-6 border-b pb-1 text-base font-semibold;
+}
+.markdown h3 {
+  @apply mt-4 text-sm font-semibold;
+}
+.markdown table {
+  @apply w-full border-collapse text-[13px];
+}
+.markdown th,
+.markdown td {
+  @apply border px-2.5 py-1.5 text-left align-top;
+}
+.markdown th {
+  @apply bg-muted font-medium;
+}
+.markdown code {
+  @apply rounded bg-muted px-1 py-0.5 font-mono text-[12px];
+}
+.markdown pre {
+  @apply overflow-auto rounded-md bg-muted p-3;
+}
+.markdown pre code {
+  @apply bg-transparent p-0;
+}
+.markdown ul {
+  @apply list-disc space-y-1 pl-5;
+}
+.markdown a {
+  @apply break-all text-primary hover:underline;
+}
+.markdown blockquote {
+  @apply border-l-4 pl-3 text-muted-foreground;
+}

@@ -1,0 +1,41 @@
+# {{.DocsID}} 조치 사항
+
+## 조치 내용
+
+| 항목 | 내용 |
+|---|---|
+| 대상 | `{{.Comp.Name}}` ({{.Comp.Ecosystem}}) |
+| 버전 | {{.From}} → **{{.To}}** |
+| 조치 유형 | {{if eq .Kind "Image"}}컨테이너 이미지 교체 (이미지 재빌드 → 실행 테스트 → 배포){{else}}의존성 업그레이드{{end}} |
+| 작업 브랜치 | `{{.Branch}}` (기준: `{{.BaseBranch}}` @ `{{short .BaseCommit}}`) |
+| 적용 방법 | {{.FixSummary}} |
+
+{{if .ChangedFiles}}### 변경 파일
+{{range .ChangedFiles}}
+- `{{.}}`{{end}}
+{{end}}
+## 조치 근거
+
+{{.Finding.Remediation}}
+
+{{if gt (len .Related) 0}}## 함께 해결되는 취약점
+
+이번 버전 변경으로 같은 컴포넌트의 아래 취약점도 함께 해결됩니다.
+
+| ID | 심각도 | 수정 버전 |
+|---|---|---|
+{{range .Related}}| {{.ID}} | {{.Severity}} | {{.Fixed}} |
+{{end}}{{end}}
+{{with .Vuln.KEV}}## 우선순위
+
+CISA KEV에 등재된 취약점입니다. 조치 기한 **{{.DueDate}}**. 권고 조치: {{.RequiredAction}}
+{{end}}
+## 배포 및 롤백
+
+{{if eq .Kind "Image"}}- 새 이미지: `{{.Image}}`
+{{with .Deploy}}- 배포 대상: `{{.Namespace}}/{{.Deployment}}` 컨테이너 `{{.Container}}`
+- 롤백: `kubectl -n {{.Namespace}} rollout undo deployment/{{.Deployment}}`
+{{else}}- 배포 대상이 지정되지 않았습니다. 승인 후 이미지를 레지스트리에 push 하고 워크로드를 갱신하세요.
+{{end}}{{else}}- PR 머지 후 일반 배포 절차로 반영합니다.
+- 롤백: PR을 revert 하거나 `{{.Comp.Name}}`을(를) {{.From}}로 되돌립니다. 되돌리면 취약점이 다시 노출되므로 대체 완화 조치가 필요합니다.
+{{end}}
