@@ -1,5 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Moon, ShieldAlert, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Toaster } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ export function AppLayout() {
     <div className="flex h-dvh flex-col">
       <header className="flex h-14 shrink-0 items-center gap-6 border-b bg-card px-4 sm:px-6">
         <Link to="/" className="flex items-center gap-2 font-semibold">
-          <ShieldAlert className="size-5 text-primary" />
+          <img src="/favicon.svg" alt="" className="size-7" />
           Cassandra
         </Link>
         <nav className="flex items-center gap-1 text-sm">
