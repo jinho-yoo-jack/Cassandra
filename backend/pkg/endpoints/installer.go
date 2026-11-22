@@ -8,10 +8,10 @@ import (
 	"sort"
 	"strings"
 
-	apierrors "github.com/jinho-yoo-jack/vulngraph/pkg/api/errors"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/endpoints/handlers"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/endpoints/request"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/registry/rest"
+	apierrors "github.com/jinho-yoo-jack/Cassandra/backend/pkg/api/errors"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/endpoints/handlers"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/endpoints/request"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/rest"
 )
 
 // APIGroupVersion is a group/version and the storage for its resources.

@@ -5,12 +5,12 @@ import (
 	"context"
 	"net/url"
 
-	apierrors "github.com/jinho-yoo-jack/vulngraph/pkg/api/errors"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/apis/vulngraph/v1alpha1"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/registry/generic"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/registry/rest"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/storage"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/watch"
+	apierrors "github.com/jinho-yoo-jack/Cassandra/backend/pkg/api/errors"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/generic"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/rest"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/storage"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/watch"
 )
 
 // REST is read-only; feeds are written by the feed syncer.

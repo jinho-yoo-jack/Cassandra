@@ -15,28 +15,28 @@ import (
 	"github.com/spf13/cobra"
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/jinho-yoo-jack/vulngraph/cmd/vulngraph-apiserver/app/options"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/apiserver"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/deploy"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/git"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/github"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory/extractor/all"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/runner"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/server"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/storage/boltstore"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/epss"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/kev"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/nvd"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/osv"
+	"github.com/jinho-yoo-jack/Cassandra/backend/cmd/cassandra-apiserver/app/options"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apiserver"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/deploy"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/git"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/github"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory/extractor/all"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/runner"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/server"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/storage/boltstore"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/epss"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/kev"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/nvd"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/osv"
 )
 
 // NewAPIServerCommand creates the root command.
 func NewAPIServerCommand() *cobra.Command {
 	s := options.NewServerRunOptions()
 	cmd := &cobra.Command{
-		Use:   "vulngraph-apiserver",
+		Use:   "cassandra-apiserver",
 		Short: "Scan GitHub repositories into SBOM graphs, track vulnerabilities and drive their remediation.",
-		Long: `vulngraph-apiserver clones a GitHub repository, builds an SBOM and a code/dependency
+		Long: `cassandra-apiserver clones a GitHub repository, builds an SBOM and a code/dependency
 graph, matches every component against OSV and NVD (enriched with CISA KEV and EPSS),
 keeps re-evaluating stored scans as feeds change, and runs remediations from branch to
 pull request (and image build, runtime test and deploy for server images).`,
@@ -84,7 +84,7 @@ func Run(ctx context.Context, opts options.CompletedOptions) error {
 	if err := os.MkdirAll(opts.Storage.DataDir, 0o700); err != nil {
 		return err
 	}
-	db, err := boltstore.Open(filepath.Join(opts.Storage.DataDir, "vulngraph.db"))
+	db, err := boltstore.Open(filepath.Join(opts.Storage.DataDir, "cassandra.db"))
 	if err != nil {
 		return err
 	}

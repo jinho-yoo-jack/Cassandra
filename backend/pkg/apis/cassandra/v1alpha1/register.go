@@ -1,4 +1,4 @@
-// Package v1alpha1 is the v1alpha1 version of the vulngraph.io API group.
+// Package v1alpha1 is the v1alpha1 version of the cassandra.io API group.
 //
 // Objects follow the Kubernetes API conventions: every top-level object
 // carries TypeMeta and ObjectMeta, desired state lives in Spec and observed
@@ -6,15 +6,15 @@
 package v1alpha1
 
 const (
-	// GroupName is the API group served by vulngraph-apiserver.
-	GroupName = "vulngraph.io"
+	// GroupName is the API group served by cassandra-apiserver.
+	GroupName = "cassandra.io"
 	// Version is the API version of this package.
 	Version = "v1alpha1"
 	// SchemeGroupVersion is the apiVersion written into every object.
 	SchemeGroupVersion = GroupName + "/" + Version
 )
 
-// Resource names served under /apis/vulngraph.io/v1alpha1.
+// Resource names served under /apis/cassandra.io/v1alpha1.
 const (
 	ResourceScans           = "scans"
 	ResourceRemediations    = "remediations"

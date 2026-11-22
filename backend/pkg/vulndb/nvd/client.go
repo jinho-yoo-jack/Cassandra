@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/util/httpjson"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/util/httpjson"
 )
 
 // DefaultURL is the CVE API endpoint.

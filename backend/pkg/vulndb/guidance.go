@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/apis/vulngraph/v1alpha1"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
 )
 
 // Guidance returns remediation advice for one component, in Korean, shown on

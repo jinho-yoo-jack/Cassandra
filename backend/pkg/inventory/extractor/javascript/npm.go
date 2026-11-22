@@ -8,7 +8,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
 )
 
 // Extractor handles package.json. The lockfile, when present, supplies the

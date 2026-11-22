@@ -16,8 +16,8 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/storage"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/watch"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/storage"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/watch"
 )
 
 var (

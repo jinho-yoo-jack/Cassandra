@@ -15,7 +15,7 @@ import (
 	"golang.org/x/mod/module"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
 )
 
 // StdlibName is the OSV package name of the Go standard library.

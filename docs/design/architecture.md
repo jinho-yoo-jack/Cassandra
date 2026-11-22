@@ -1,4 +1,4 @@
-# VulnGraph 설계 기록
+# Cassandra 설계 기록
 
 사용법과 구조 개요는 [README](../../README.md), 피드 조사는 [vulnerability-feeds.md](../research/vulnerability-feeds.md)에 있습니다. 이 문서는 README에 없는 **설계 결정과 그 이유**만 기록합니다.
 

@@ -8,12 +8,12 @@ import (
 	"net/http"
 	"time"
 
-	apierrors "github.com/jinho-yoo-jack/vulngraph/pkg/api/errors"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/apis/vulngraph/v1alpha1"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/endpoints/handlers"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/github"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/osv"
+	apierrors "github.com/jinho-yoo-jack/Cassandra/backend/pkg/api/errors"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/endpoints/handlers"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/github"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/osv"
 )
 
 // GitHubWebhookFeed is the Feed name of the push source.

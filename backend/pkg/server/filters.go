@@ -6,9 +6,9 @@ import (
 	"runtime/debug"
 	"time"
 
-	apierrors "github.com/jinho-yoo-jack/vulngraph/pkg/api/errors"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/endpoints/handlers"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/endpoints/request"
+	apierrors "github.com/jinho-yoo-jack/Cassandra/backend/pkg/api/errors"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/endpoints/handlers"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/endpoints/request"
 )
 
 // WithRequestInfo attaches RequestInfo to every request.

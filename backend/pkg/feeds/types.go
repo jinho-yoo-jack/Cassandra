@@ -5,7 +5,7 @@ package feeds
 import (
 	"strings"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
 )
 
 // PackageKey identifies a package across scans: an OSV ecosystem and name,

@@ -15,17 +15,17 @@ import (
 	"strings"
 	"time"
 
-	apierrors "github.com/jinho-yoo-jack/vulngraph/pkg/api/errors"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/api/validation/field"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/apis/vulngraph/v1alpha1"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/git"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/registry/generic"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/registry/rest"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/report"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/storage"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/watch"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/workspace"
+	apierrors "github.com/jinho-yoo-jack/Cassandra/backend/pkg/api/errors"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/api/validation/field"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/git"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/generic"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/rest"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/report"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/storage"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/watch"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/workspace"
 )
 
 const resource = v1alpha1.ResourceRemediations

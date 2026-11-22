@@ -23,22 +23,22 @@ import (
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/apis/vulngraph/v1alpha1"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/deploy"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/fixer"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/git"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/github"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory/extractor/all"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/runner"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/server"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/storage/boltstore"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/epss"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/kev"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/nvd"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/osv"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/deploy"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/fixer"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/git"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/github"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory/extractor/all"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/runner"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/server"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/storage/boltstore"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/epss"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/kev"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/nvd"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/osv"
 )
 
-const apiRoot = "/apis/vulngraph.io/v1alpha1"
+const apiRoot = "/apis/cassandra.io/v1alpha1"
 
 // fakeRunner succeeds for every command and records the scripts.
 type fakeRunner struct {
@@ -200,7 +200,7 @@ func TestEndToEnd(t *testing.T) {
 	origin := newOrigin(t)
 	fk := newFakes(t)
 	dataDir := t.TempDir()
-	db, err := boltstore.Open(filepath.Join(dataDir, "vulngraph.db"))
+	db, err := boltstore.Open(filepath.Join(dataDir, "cassandra.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

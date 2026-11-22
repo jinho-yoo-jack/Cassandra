@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
 )
 
 // Extractor handles Gemfile.lock.

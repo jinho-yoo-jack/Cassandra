@@ -10,8 +10,8 @@ import (
 
 	"golang.org/x/mod/modfile"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory/extractor/container"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory/extractor/container"
 )
 
 // ---------------------------------------------------------------------------
@@ -204,7 +204,7 @@ func pinRequirement(content, name, target string) string {
 	if !strings.HasSuffix(content, "\n") && content != "" {
 		suffix = "\n"
 	}
-	return content + suffix + fmt.Sprintf("%s>=%s  # vulngraph: transitive dependency pin\n", name, target)
+	return content + suffix + fmt.Sprintf("%s>=%s  # cassandra: transitive dependency pin\n", name, target)
 }
 
 // ---------------------------------------------------------------------------

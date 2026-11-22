@@ -1,4 +1,4 @@
-module github.com/jinho-yoo-jack/vulngraph
+module github.com/jinho-yoo-jack/Cassandra/backend
 
 go 1.27.3
 

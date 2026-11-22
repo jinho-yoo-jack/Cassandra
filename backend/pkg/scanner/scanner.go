@@ -10,13 +10,13 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/apis/vulngraph/v1alpha1"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/codegraph"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/git"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/github"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/report"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/codegraph"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/git"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/github"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/report"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb"
 )
 
 // Scanner produces reports.

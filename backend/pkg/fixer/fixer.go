@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/runner"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/runner"
 )
 
 // ErrManual means no automatic fix exists for this case.

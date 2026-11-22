@@ -15,9 +15,9 @@ import (
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/report"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/nvd"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/report"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/nvd"
 )
 
 // Format is an SBOM output format.
@@ -30,7 +30,7 @@ const (
 
 // ToolName and ToolVersion identify the generator.
 var (
-	ToolName    = "vulngraph"
+	ToolName    = "cassandra"
 	ToolVersion = "0.1.0"
 )
 
@@ -66,16 +66,16 @@ func encodeCycloneDX(r *report.Report) ([]byte, error) {
 	for _, p := range r.Inventory.Projects {
 		comps = append(comps, cdx.Component{
 			BOMRef: p.ID, Type: cdx.ComponentTypeApplication, Name: p.Name,
-			Properties: &[]cdx.Property{{Name: "vulngraph:manifest", Value: p.Manifest}},
+			Properties: &[]cdx.Property{{Name: "cassandra:manifest", Value: p.Manifest}},
 		})
 	}
 	for _, c := range r.Inventory.Components {
 		cc := cdx.Component{
 			BOMRef: c.ID, Type: cdxType(c), Name: c.Name, Version: c.Version, PackageURL: c.PURL,
 			Properties: &[]cdx.Property{
-				{Name: "vulngraph:ecosystem", Value: string(c.Ecosystem)},
-				{Name: "vulngraph:direct", Value: strconv.FormatBool(c.Direct)},
-				{Name: "vulngraph:locations", Value: strings.Join(c.Locations, ",")},
+				{Name: "cassandra:ecosystem", Value: string(c.Ecosystem)},
+				{Name: "cassandra:direct", Value: strconv.FormatBool(c.Direct)},
+				{Name: "cassandra:locations", Value: strings.Join(c.Locations, ",")},
 			},
 		}
 		if c.Dev {
@@ -141,7 +141,7 @@ func encodeCycloneDX(r *report.Report) ([]byte, error) {
 			props = append(props, cdx.Property{Name: "first:epss", Value: strconv.FormatFloat(v.EPSS.Score, 'f', 5, 64)})
 		}
 		if f.FixedVersion != "" {
-			props = append(props, cdx.Property{Name: "vulngraph:fixedVersion", Value: f.FixedVersion})
+			props = append(props, cdx.Property{Name: "cassandra:fixedVersion", Value: f.FixedVersion})
 		}
 		if len(props) > 0 {
 			cv.Properties = &props
@@ -250,7 +250,7 @@ func encodeSPDX(r *report.Report) ([]byte, error) {
 	name := r.Repository.Owner + "/" + r.Repository.Name
 	doc := spdxDocument{
 		SPDXVersion: "SPDX-2.3", DataLicense: "CC0-1.0", SPDXID: "SPDXRef-DOCUMENT", Name: name,
-		DocumentNamespace: fmt.Sprintf("https://vulngraph.io/spdx/%s-%s", spdxIDInvalid.ReplaceAllString(name, "-"), uuid()),
+		DocumentNamespace: fmt.Sprintf("https://cassandra.io/spdx/%s-%s", spdxIDInvalid.ReplaceAllString(name, "-"), uuid()),
 		CreationInfo: spdxCreationInfo{
 			Created:  r.GeneratedAt.UTC().Format(time.RFC3339),
 			Creators: []string{"Tool: " + ToolName + "-" + ToolVersion},

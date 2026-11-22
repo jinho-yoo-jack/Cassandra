@@ -1,4 +1,4 @@
-// Package apiserver assembles vulngraph-apiserver from the generic server,
+// Package apiserver assembles cassandra-apiserver from the generic server,
 // the registries, the controllers and the feed syncer, following the
 // Config → Complete → New pattern of k8s.io/sample-apiserver.
 package apiserver
@@ -11,32 +11,32 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/apis/vulngraph/v1alpha1"
-	remediationcontroller "github.com/jinho-yoo-jack/vulngraph/pkg/controller/remediation"
-	scancontroller "github.com/jinho-yoo-jack/vulngraph/pkg/controller/scan"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/deploy"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/endpoints"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/feeds"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/fixer"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/git"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/github"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
-	feedregistry "github.com/jinho-yoo-jack/vulngraph/pkg/registry/feed"
-	remediationregistry "github.com/jinho-yoo-jack/vulngraph/pkg/registry/remediation"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/registry/rest"
-	scanregistry "github.com/jinho-yoo-jack/vulngraph/pkg/registry/scan"
-	vulnregistry "github.com/jinho-yoo-jack/vulngraph/pkg/registry/vulnerability"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/report"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/runner"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/scanner"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/server"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/storage/boltstore"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/epss"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/kev"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/nvd"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/osv"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/workspace"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
+	remediationcontroller "github.com/jinho-yoo-jack/Cassandra/backend/pkg/controller/remediation"
+	scancontroller "github.com/jinho-yoo-jack/Cassandra/backend/pkg/controller/scan"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/deploy"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/endpoints"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/feeds"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/fixer"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/git"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/github"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
+	feedregistry "github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/feed"
+	remediationregistry "github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/remediation"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/rest"
+	scanregistry "github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/scan"
+	vulnregistry "github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/vulnerability"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/report"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/runner"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/scanner"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/server"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/storage/boltstore"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/epss"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/kev"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/nvd"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/osv"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/workspace"
 )
 
 // FeedConfig configures the feed syncer.
@@ -49,7 +49,7 @@ type FeedConfig struct {
 	WebhookSecret string
 }
 
-// ExtraConfig holds vulngraph specific configuration.
+// ExtraConfig holds cassandra specific configuration.
 type ExtraConfig struct {
 	DB      *bolt.DB
 	DataDir string
@@ -102,8 +102,8 @@ func (cfg *Config) Complete() CompletedConfig {
 	return CompletedConfig{&completedConfig{GenericConfig: cfg.GenericConfig.Complete(), ExtraConfig: &cfg.ExtraConfig}}
 }
 
-// VulnGraphServer is the assembled server.
-type VulnGraphServer struct {
+// CassandraServer is the assembled server.
+type CassandraServer struct {
 	GenericAPIServer      *server.GenericAPIServer
 	ScanController        *scancontroller.Controller
 	RemediationController *remediationcontroller.Controller
@@ -111,7 +111,7 @@ type VulnGraphServer struct {
 }
 
 // New builds the server.
-func (c CompletedConfig) New() (*VulnGraphServer, error) {
+func (c CompletedConfig) New() (*CassandraServer, error) {
 	x := c.ExtraConfig
 	log := c.GenericConfig.Logger
 
@@ -217,7 +217,7 @@ func (c CompletedConfig) New() (*VulnGraphServer, error) {
 
 	log.Info("[apiserver] Configured", "dataDir", x.DataDir, "feeds", x.Feeds.Enabled,
 		"webhook", x.Feeds.WebhookSecret != "", "githubToken", x.GitHub.Token != "")
-	return &VulnGraphServer{
+	return &CassandraServer{
 		GenericAPIServer: genericServer, ScanController: scanController,
 		RemediationController: remediationController, Syncer: syncer,
 	}, nil

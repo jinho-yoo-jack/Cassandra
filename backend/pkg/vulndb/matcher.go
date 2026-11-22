@@ -10,12 +10,12 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/apis/vulngraph/v1alpha1"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/epss"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/kev"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/nvd"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/osv"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/epss"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/kev"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/nvd"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/osv"
 )
 
 // osvEcosystems are the inventory ecosystems OSV can match.

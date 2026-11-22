@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/api/validation/field"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/apis/vulngraph/v1alpha1"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/storage"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/api/validation/field"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/storage"
 )
 
 // StatusError is an error intended for consumption by a REST API client.

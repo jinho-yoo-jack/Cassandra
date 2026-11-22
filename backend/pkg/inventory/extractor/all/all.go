@@ -3,15 +3,15 @@
 package all
 
 import (
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory/extractor/container"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory/extractor/golang"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory/extractor/java"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory/extractor/javascript"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory/extractor/php"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory/extractor/python"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory/extractor/ruby"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory/extractor/rust"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory/extractor/container"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory/extractor/golang"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory/extractor/java"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory/extractor/javascript"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory/extractor/php"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory/extractor/python"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory/extractor/ruby"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory/extractor/rust"
 )
 
 // Options configures extractors that need network access.

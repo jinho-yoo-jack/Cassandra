@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/apis/vulngraph/v1alpha1"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/fixer"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory/extractor/container"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/runner"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/version"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/fixer"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory/extractor/container"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/runner"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/version"
 )
 
 // scenario is one entry of test-scenarios.md and the check that runs it.

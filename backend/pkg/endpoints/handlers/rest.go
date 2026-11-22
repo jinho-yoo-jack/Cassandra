@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	apierrors "github.com/jinho-yoo-jack/vulngraph/pkg/api/errors"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/registry/rest"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/watch"
+	apierrors "github.com/jinho-yoo-jack/Cassandra/backend/pkg/api/errors"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/rest"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/watch"
 )
 
 // maxBodyBytes bounds request bodies; API objects are small.

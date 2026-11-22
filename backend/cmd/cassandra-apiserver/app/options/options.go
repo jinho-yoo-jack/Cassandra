@@ -1,4 +1,4 @@
-// Package options contains the flags of vulngraph-apiserver, grouped into
+// Package options contains the flags of cassandra-apiserver, grouped into
 // named flag sets like kube-apiserver's ServerRunOptions.
 package options
 
@@ -13,7 +13,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/fixer"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/fixer"
 )
 
 // ServingOptions configure the HTTP server.
@@ -92,7 +92,7 @@ func NewServerRunOptions() *ServerRunOptions {
 		GitHub: &GitHubOptions{},
 		Remediation: &RemediationOptions{
 			Runner: "docker", ToolchainImages: map[string]string{}, Kubectl: "kubectl",
-			AuthorName: "vulngraph-bot", AuthorEmail: "vulngraph-bot@users.noreply.github.com",
+			AuthorName: "cassandra-bot", AuthorEmail: "cassandra-bot@users.noreply.github.com",
 		},
 		Controllers: &ControllerOptions{ConcurrentScanSyncs: 2, ConcurrentRemediationSyncs: 2},
 		Logging:     &LoggingOptions{Level: "info", Format: "text"},
@@ -128,7 +128,7 @@ func (s *ServerRunOptions) Flags() NamedFlagSets {
 	fs.DurationVar(&s.Serving.ShutdownTimeout, "shutdown-timeout", s.Serving.ShutdownTimeout, "Grace period for in-flight requests on shutdown.")
 
 	fs = fss.FlagSet("storage")
-	fs.StringVar(&s.Storage.DataDir, "data-dir", s.Storage.DataDir, "Directory for the database and working copies. Defaults to ~/.vulngraph.")
+	fs.StringVar(&s.Storage.DataDir, "data-dir", s.Storage.DataDir, "Directory for the database and working copies. Defaults to ~/.cassandra.")
 
 	fs = fss.FlagSet("feeds")
 	fs.BoolVar(&s.Feeds.Enabled, "feeds", s.Feeds.Enabled, "Continuously sync OSV, NVD and CISA KEV and re-evaluate stored scans.")
@@ -186,7 +186,7 @@ func (s *ServerRunOptions) Complete() (CompletedOptions, error) {
 		if err != nil {
 			return CompletedOptions{}, err
 		}
-		s.Storage.DataDir = filepath.Join(home, ".vulngraph")
+		s.Storage.DataDir = filepath.Join(home, ".cassandra")
 	}
 	if s.GitHub.Token == "" {
 		s.GitHub.Token = os.Getenv("GITHUB_TOKEN")

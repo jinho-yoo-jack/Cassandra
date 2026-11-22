@@ -8,7 +8,7 @@ type Theme = "light" | "dark";
 
 function initialTheme(): Theme {
   try {
-    const saved = localStorage.getItem("vulngraph-theme");
+    const saved = localStorage.getItem("cassandra-theme");
     if (saved === "light" || saved === "dark") return saved;
   } catch {
     // Storage may be unavailable; fall back to the OS preference.
@@ -21,7 +21,7 @@ export function AppLayout() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
     try {
-      localStorage.setItem("vulngraph-theme", theme);
+      localStorage.setItem("cassandra-theme", theme);
     } catch {
       // Not persisting the theme is harmless.
     }
@@ -32,7 +32,7 @@ export function AppLayout() {
       <header className="flex h-14 shrink-0 items-center gap-6 border-b bg-card px-4 sm:px-6">
         <Link to="/" className="flex items-center gap-2 font-semibold">
           <ShieldAlert className="size-5 text-primary" />
-          VulnGraph
+          Cassandra
         </Link>
         <nav className="flex items-center gap-1 text-sm">
           <Link to="/" className="rounded-md px-3 py-1.5 text-muted-foreground hover:text-foreground [&.active]:bg-muted [&.active]:text-foreground" activeOptions={{ exact: true }}>

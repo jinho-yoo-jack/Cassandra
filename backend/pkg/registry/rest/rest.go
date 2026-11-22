@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/url"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/watch"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/watch"
 )
 
 // Storage is the minimal interface every resource implements.

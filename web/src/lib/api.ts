@@ -1,7 +1,7 @@
-// Typed client for /apis/vulngraph.io/v1alpha1. Types mirror
-// backend/pkg/apis/vulngraph/v1alpha1.
+// Typed client for /apis/cassandra.io/v1alpha1. Types mirror
+// backend/pkg/apis/cassandra/v1alpha1.
 
-export const API_ROOT = "/apis/vulngraph.io/v1alpha1";
+export const API_ROOT = "/apis/cassandra.io/v1alpha1";
 
 export type Severity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "NONE" | "UNKNOWN";
 

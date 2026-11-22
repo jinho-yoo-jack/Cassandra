@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/util/httpjson"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/util/httpjson"
 )
 
 // RepoRef identifies a repository.

@@ -184,7 +184,7 @@ function Pipeline({ steps }: { steps: RemediationStep[] }) {
 function ReviewPanel({ remediation }: { remediation: Remediation }) {
   const [reviewer, setReviewer] = useState(() => {
     try {
-      return localStorage.getItem("vulngraph-reviewer") ?? "";
+      return localStorage.getItem("cassandra-reviewer") ?? "";
     } catch {
       return "";
     }
@@ -195,7 +195,7 @@ function ReviewPanel({ remediation }: { remediation: Remediation }) {
     mutationFn: (approved: boolean) => api.approve(remediation.metadata.name, approved, reviewer.trim(), comment),
     onSuccess: (_, approved) => {
       try {
-        localStorage.setItem("vulngraph-reviewer", reviewer.trim());
+        localStorage.setItem("cassandra-reviewer", reviewer.trim());
       } catch {
         // Remembering the reviewer name is a convenience only.
       }

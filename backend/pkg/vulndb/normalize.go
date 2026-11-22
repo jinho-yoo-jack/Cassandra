@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/apis/vulngraph/v1alpha1"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/version"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/cvss"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/nvd"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/osv"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/version"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/cvss"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/nvd"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/osv"
 )
 
 // EcosystemCPE is the AffectedPackage ecosystem of NVD CPE ranges.

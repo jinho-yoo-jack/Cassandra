@@ -1,4 +1,4 @@
-// Command vulngraph-apiserver serves the vulngraph.io API.
+// Command cassandra-apiserver serves the cassandra.io API.
 package main
 
 import (
@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/jinho-yoo-jack/vulngraph/cmd/vulngraph-apiserver/app"
+	"github.com/jinho-yoo-jack/Cassandra/backend/cmd/cassandra-apiserver/app"
 )
 
 func main() {

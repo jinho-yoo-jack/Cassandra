@@ -178,7 +178,7 @@ func (r *Repo) ChangedFiles(ctx context.Context, base string) ([]string, error) 
 	return strings.Split(out, "\n"), nil
 }
 
-// Push force-pushes HEAD to a branch owned by vulngraph.
+// Push force-pushes HEAD to a branch owned by cassandra.
 func (r *Repo) Push(ctx context.Context, branch string) error {
 	_, err := r.Run(ctx, "push", "-q", "--force", "origin", "HEAD:refs/heads/"+branch)
 	return err

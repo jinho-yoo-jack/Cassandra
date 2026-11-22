@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/endpoints"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/endpoints/request"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/endpoints"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/endpoints/request"
 )
 
 // Config is the configuration of a GenericAPIServer.

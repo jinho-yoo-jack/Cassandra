@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory/extractor/container"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory/extractor/container"
 )
 
 func TestPinRequirement(t *testing.T) {
@@ -13,7 +13,7 @@ func TestPinRequirement(t *testing.T) {
 	}{
 		{"pinned", "Django==3.2.0\nrequests==2.0\n", "django", "3.2.25", "Django==3.2.25\nrequests==2.0\n"},
 		{"extras and markers", "requests[security]>=2.0 ; python_version > '3'\n", "requests", "2.32.0", "requests[security]==2.32.0 ; python_version > '3'\n"},
-		{"transitive appended", "flask==2.0", "Jinja2", "3.1.4", "flask==2.0\nJinja2>=3.1.4  # vulngraph: transitive dependency pin\n"},
+		{"transitive appended", "flask==2.0", "Jinja2", "3.1.4", "flask==2.0\nJinja2>=3.1.4  # cassandra: transitive dependency pin\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

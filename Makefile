@@ -1,4 +1,4 @@
-BIN := backend/bin/vulngraph-apiserver
+BIN := backend/bin/cassandra-apiserver
 
 .PHONY: build web backend test run dev-api dev-web clean
 
@@ -8,7 +8,7 @@ web:
 	cd web && npm ci --no-audit --no-fund && npm run build
 
 backend:
-	cd backend && go build -o bin/vulngraph-apiserver ./cmd/vulngraph-apiserver
+	cd backend && go build -o bin/cassandra-apiserver ./cmd/cassandra-apiserver
 
 test:
 	cd backend && go vet ./... && go test -race ./...

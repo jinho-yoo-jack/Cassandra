@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	apierrors "github.com/jinho-yoo-jack/vulngraph/pkg/api/errors"
+	apierrors "github.com/jinho-yoo-jack/Cassandra/backend/pkg/api/errors"
 )
 
 // WriteObject writes obj as JSON with the given status code.

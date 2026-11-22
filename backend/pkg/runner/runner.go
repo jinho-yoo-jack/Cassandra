@@ -88,7 +88,7 @@ func (d *Docker) Run(ctx context.Context, spec Spec) (Result, error) {
 	if err != nil {
 		return Result{ExitCode: -1, Output: pullLog}, err
 	}
-	name := "vulngraph-run-" + randomHex(6)
+	name := "cassandra-run-" + randomHex(6)
 	args := []string{
 		"run", "--rm", "--name", name,
 		"-v", spec.Root + ":/workspace", "-w", filepath.ToSlash(filepath.Join("/workspace", spec.WorkDir)),

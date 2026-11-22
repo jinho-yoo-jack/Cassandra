@@ -1,10 +1,10 @@
-# VulnGraph
+# Cassandra
 
 GitHub 저장소 하나를 넣으면 **코드와 사용 중인 라이브러리·컨테이너 이미지를 SBOM으로 추출해 그래프로 보여주고**, OSV·NVD·CISA KEV·EPSS로 취약점을 표시합니다. 노드에 마우스를 올리면 CVE 상세와 조치 방법이 나오고, **조치** 버튼으로 브랜치 생성 → 수정 → 테스트 시나리오 → 테스트 → 검토 → 승인 → PR 까지 진행합니다. Nginx·Apache 같은 서버 이미지는 이미지 재빌드 → 실행 테스트 → 배포까지 이어집니다.
 
 ```mermaid
 flowchart LR
-  UI[React UI] -- REST + SSE watch --> API[vulngraph-apiserver]
+  UI[React UI] -- REST + SSE watch --> API[cassandra-apiserver]
   API --> SC[Scan controller]
   API --> RC[Remediation controller]
   SC -- clone / extract / match --> SBOM[(SBOM + 코드 그래프)]
@@ -67,9 +67,9 @@ Go(`go.mod` + 모듈 프록시로 실제 의존 그래프), npm(`package-lock.js
 
 ```
 backend/
-├── cmd/vulngraph-apiserver/app/          cobra 커맨드, Run
+├── cmd/cassandra-apiserver/app/          cobra 커맨드, Run
 │   └── options/                          ServerRunOptions: 그룹별 flag set, Complete/Validate
-├── pkg/apis/vulngraph/v1alpha1/          TypeMeta/ObjectMeta/Spec/Status 타입
+├── pkg/apis/cassandra/v1alpha1/          TypeMeta/ObjectMeta/Spec/Status 타입
 ├── pkg/server/                           GenericAPIServer: 필터 체인, healthz/readyz, PostStartHook, graceful shutdown
 ├── pkg/endpoints/                        RequestInfo 파싱 → verb별 rest 인터페이스 type assertion 디스패치, discovery, SSE watch
 ├── pkg/registry/{scan,remediation,...}/  REST storage + 서브리소스(graph, sbom, approval, docs, diff)
@@ -85,14 +85,14 @@ backend/
 └── pkg/git/ · pkg/github/ · pkg/deploy/
 ```
 
-API는 `/apis/vulngraph.io/v1alpha1` 에 있고, `GET /apis/vulngraph.io/v1alpha1` 이 discovery 문서입니다.
+API는 `/apis/cassandra.io/v1alpha1` 에 있고, `GET /apis/cassandra.io/v1alpha1` 이 discovery 문서입니다.
 
 ```sh
-curl -X POST localhost:8080/apis/vulngraph.io/v1alpha1/scans \
+curl -X POST localhost:8080/apis/cassandra.io/v1alpha1/scans \
   -d '{"spec":{"repositoryURL":"https://github.com/owner/repo"}}'
-curl -N -H 'Accept: text/event-stream' 'localhost:8080/apis/vulngraph.io/v1alpha1/scans?watch=true'
-curl -OJ 'localhost:8080/apis/vulngraph.io/v1alpha1/scans/<name>/sbom?format=cyclonedx'
-curl -X POST localhost:8080/apis/vulngraph.io/v1alpha1/remediations/<name>/approval \
+curl -N -H 'Accept: text/event-stream' 'localhost:8080/apis/cassandra.io/v1alpha1/scans?watch=true'
+curl -OJ 'localhost:8080/apis/cassandra.io/v1alpha1/scans/<name>/sbom?format=cyclonedx'
+curl -X POST localhost:8080/apis/cassandra.io/v1alpha1/remediations/<name>/approval \
   -d '{"approved":true,"reviewer":"alice"}'
 ```
 

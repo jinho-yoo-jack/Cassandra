@@ -13,13 +13,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/apis/vulngraph/v1alpha1"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/feeds"
-	scanregistry "github.com/jinho-yoo-jack/vulngraph/pkg/registry/scan"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/report"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/scanner"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/storage"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/watch"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/feeds"
+	scanregistry "github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/scan"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/report"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/scanner"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/storage"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/watch"
 )
 
 const (

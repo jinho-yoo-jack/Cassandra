@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
 )
 
 // Package is a directory of first-party source files.

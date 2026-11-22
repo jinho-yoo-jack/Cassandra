@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jinho-yoo-jack/vulngraph/pkg/inventory"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/storage/boltstore"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/epss"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/kev"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/nvd"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/vulndb/osv"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/storage/boltstore"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/epss"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/kev"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/nvd"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/osv"
 )
 
 // advisories served by the fake OSV API. GHSA and GO records describe the

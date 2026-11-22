@@ -1,8 +1,8 @@
 package vulndb
 
 import (
-	"github.com/jinho-yoo-jack/vulngraph/pkg/apis/vulngraph/v1alpha1"
-	"github.com/jinho-yoo-jack/vulngraph/pkg/storage/boltstore"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/storage/boltstore"
 )
 
 // Cache persists normalised advisories so that rescans and the
