@@ -74,3 +74,15 @@ func TestCollapse(t *testing.T) {
 		t.Errorf("edges = %v", g.Edges)
 	}
 }
+
+func TestImportResolvesDeclaredCopy(t *testing.T) {
+	proj := &inventory.Project{ID: "project:package.json", Manifest: "package.json", Dir: ".", Ecosystem: inventory.NPM}
+	nested := inventory.NewLibrary(inventory.NPM, "lodash", "4.17.10", "package.json", false, false)
+	direct := inventory.NewLibrary(inventory.NPM, "lodash", "4.17.4", "package.json", true, false)
+	// The nested copy comes first, as it did in real lockfiles.
+	inv := &inventory.Inventory{Projects: []*inventory.Project{proj}, Components: []*inventory.Component{nested, direct}}
+	r := newResolver(inv, map[string]*Package{})
+	if id, ok := r.component(inventory.NPM, "lodash", proj); !ok || id != direct.ID {
+		t.Fatalf("resolved %s, want the declared copy %s", id, direct.ID)
+	}
+}

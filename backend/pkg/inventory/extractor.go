@@ -23,8 +23,9 @@ type Extractor interface {
 
 // Input gives an extractor access to the manifest and its siblings.
 type Input struct {
-	FS   fs.FS
-	Path string
+	FS       fs.FS
+	Path     string
+	warnings []string
 }
 
 // Dir is the directory containing the manifest.
@@ -39,6 +40,12 @@ func (in *Input) Sibling(name string) string { return path.Join(in.Dir(), name) 
 // Exists reports whether a repository relative file exists.
 func (in *Input) Exists(p string) bool {
 	fi, err := fs.Stat(in.FS, p)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		in.warnings = append(in.warnings, fmt.Sprintf("cannot inspect companion file %s: %v", p, err))
+	}
+	if err == nil && fi.IsDir() {
+		in.warnings = append(in.warnings, fmt.Sprintf("expected companion file %s, found a directory", p))
+	}
 	return err == nil && !fi.IsDir()
 }
 
@@ -72,13 +79,28 @@ var SkipDirs = map[string]bool{
 // Extraction errors of single manifests are logged and skipped so that one
 // malformed file does not fail the whole scan.
 func Extract(ctx context.Context, fsys fs.FS, extractors []Extractor, log *slog.Logger) (*Inventory, error) {
+	inv, _, err := ExtractWithDiagnostics(ctx, fsys, extractors, log)
+	return inv, err
+}
+
+// ExtractWithDiagnostics retains partial extraction failures for callers such
+// as CI that must distinguish an incomplete inventory from a clean scan.
+func ExtractWithDiagnostics(ctx context.Context, fsys fs.FS, extractors []Extractor, log *slog.Logger) (*Inventory, []string, error) {
+	if log == nil {
+		log = slog.Default()
+	}
 	inv := &Inventory{}
+	var warnings []string
 	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil // unreadable entries are skipped
-		}
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if err != nil {
+			if p == "." {
+				return err
+			}
+			warnings = append(warnings, fmt.Sprintf("inventory: read %s: %v", p, err))
+			return nil
 		}
 		if d.IsDir() {
 			if p != "." && (SkipDirs[d.Name()] || strings.HasPrefix(d.Name(), ".") && d.Name() != ".github") {
@@ -87,29 +109,46 @@ func Extract(ctx context.Context, fsys fs.FS, extractors []Extractor, log *slog.
 			return nil
 		}
 		if !d.Type().IsRegular() {
-			return nil // symlinks may point outside the checkout
+			// Never silently certify a skipped dependency manifest as clean.
+			// Symlinks are not followed here, including links within the root.
+			for _, e := range extractors {
+				if e.FileRequired(p) {
+					warnings = append(warnings, fmt.Sprintf("inventory: skipped non-regular manifest %s (%s)", p, e.Name()))
+				}
+			}
+			return nil
 		}
 		for _, e := range extractors {
 			if !e.FileRequired(p) {
 				continue
 			}
-			res, err := e.Extract(ctx, &Input{FS: fsys, Path: p})
+			in := &Input{FS: fsys, Path: p}
+			res, err := e.Extract(ctx, in)
+			for _, warning := range in.warnings {
+				warnings = append(warnings, fmt.Sprintf("inventory: %s %s: %s", e.Name(), p, warning))
+			}
 			if err != nil {
-				if errors.Is(err, context.Canceled) {
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					return err
 				}
+				warnings = append(warnings, fmt.Sprintf("inventory: %s %s: %v", e.Name(), p, err))
 				log.Warn("[inventory] Extract failed", "extractor", e.Name(), "path", p, "err", err)
 				continue
 			}
-			if res != nil && res.Project != nil {
-				inv.Merge(res)
+			if res != nil {
+				for _, warning := range res.Warnings {
+					warnings = append(warnings, fmt.Sprintf("inventory: %s %s: %s", e.Name(), p, warning))
+				}
+				if res.Project != nil {
+					inv.Merge(res)
+				}
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, warnings, err
 	}
 	inv.Sort()
-	return inv, nil
+	return inv, warnings, nil
 }

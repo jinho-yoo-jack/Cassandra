@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -96,7 +97,8 @@ func (e *Extractor) Extract(ctx context.Context, in *inventory.Input) (*inventor
 
 	reached := map[string]bool{}
 	if e.Proxy != "" {
-		edges := e.moduleGraph(ctx, buildList)
+		edges, warnings := e.moduleGraph(ctx, buildList)
+		res.Warnings = append(res.Warnings, warnings...)
 		for from, tos := range edges {
 			for _, to := range tos {
 				res.Dependencies = append(res.Dependencies, inventory.Dependency{From: buildList[from].ID, To: buildList[to].ID})
@@ -132,7 +134,8 @@ func goVersion(f *modfile.File) string {
 
 // moduleGraph returns, for each module in the build list, the other build
 // list modules its go.mod requires.
-func (e *Extractor) moduleGraph(ctx context.Context, buildList map[string]*inventory.Component) map[string][]string {
+func (e *Extractor) moduleGraph(ctx context.Context, buildList map[string]*inventory.Component) (map[string][]string, []string) {
+	var warnings []string
 	var (
 		mu    sync.Mutex
 		edges = map[string][]string{}
@@ -143,7 +146,10 @@ func (e *Extractor) moduleGraph(ctx context.Context, buildList map[string]*inven
 		g.Go(func() error {
 			reqs, err := e.requirements(ctx, module.Version{Path: c.Name, Version: c.Version})
 			if err != nil {
-				return nil // private or missing module: keep it attached to the project
+				mu.Lock()
+				warnings = append(warnings, fmt.Sprintf("module %s@%s: dependency graph resolution failed: %v; keeping declared module with fallback edges", c.Name, c.Version, err))
+				mu.Unlock()
+				return nil
 			}
 			var tos []string
 			for _, r := range reqs {
@@ -158,7 +164,8 @@ func (e *Extractor) moduleGraph(ctx context.Context, buildList map[string]*inven
 		})
 	}
 	_ = g.Wait()
-	return edges
+	sort.Strings(warnings)
+	return edges, warnings
 }
 
 func (e *Extractor) requirements(ctx context.Context, m module.Version) ([]module.Version, error) {
@@ -193,6 +200,9 @@ func (e *Extractor) requirements(ctx context.Context, m module.Version) ([]modul
 	f, err := modfile.ParseLax("go.mod", data, nil)
 	if err != nil {
 		return nil, err
+	}
+	if f.Module == nil {
+		return nil, fmt.Errorf("proxy go.mod missing module directive")
 	}
 	reqs := make([]module.Version, 0, len(f.Require))
 	for _, r := range f.Require {

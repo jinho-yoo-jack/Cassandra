@@ -12,8 +12,6 @@ import (
 
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/epss"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/kev"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/nvd"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/osv"
 )
@@ -26,11 +24,11 @@ var osvEcosystems = map[inventory.Ecosystem]bool{
 
 // Matcher finds the vulnerabilities of an inventory.
 type Matcher struct {
-	OSV   *osv.Client
-	NVD   *nvd.Client
-	KEV   *kev.Catalog
-	EPSS  *epss.Client
-	Cache *Cache
+	OSV   OSVProvider
+	NVD   NVDProvider
+	KEV   KEVProvider
+	EPSS  EPSSProvider
+	Cache AdvisoryCache
 	Log   *slog.Logger
 }
 
@@ -45,6 +43,9 @@ type Result struct {
 // Match queries OSV for libraries and NVD for processes, de-duplicates
 // aliases per component, enriches with KEV and EPSS and computes fixes.
 func (m *Matcher) Match(ctx context.Context, inv *inventory.Inventory) (*Result, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	res := &Result{Vulnerabilities: map[string]*v1alpha1.Vulnerability{}}
 	perComponent := map[string][]*v1alpha1.Vulnerability{}
 
@@ -55,7 +56,10 @@ func (m *Matcher) Match(ctx context.Context, inv *inventory.Inventory) (*Result,
 	for id, vs := range libs {
 		perComponent[id] = vs
 	}
-	procs, warnings := m.matchProcesses(ctx, inv)
+	procs, warnings, err := m.matchProcesses(ctx, inv)
+	if err != nil {
+		return nil, err
+	}
 	res.Warnings = append(res.Warnings, warnings...)
 	for id, vs := range procs {
 		perComponent[id] = vs
@@ -68,6 +72,9 @@ func (m *Matcher) Match(ctx context.Context, inv *inventory.Inventory) (*Result,
 		}
 	}
 	if err := m.Enrich(ctx, res.Vulnerabilities); err != nil {
+		if cancelErr := cancellationError(ctx); cancelErr != nil {
+			return nil, cancelErr
+		}
 		res.Warnings = append(res.Warnings, "EPSS: "+err.Error())
 	}
 	for i := range res.Findings {
@@ -82,6 +89,9 @@ func (m *Matcher) Match(ctx context.Context, inv *inventory.Inventory) (*Result,
 		}
 		return strings.Compare(a.VulnerabilityID, b.VulnerabilityID)
 	})
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return res, nil
 }
 
@@ -121,14 +131,20 @@ func (m *Matcher) matchLibraries(ctx context.Context, inv *inventory.Inventory) 
 	}
 	refs, err := m.OSV.QueryBatch(ctx, queries)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("OSV query batch: %w", err)
+	}
+	if len(refs) != len(queries) {
+		return nil, fmt.Errorf("OSV query batch: got %d results for %d queries", len(refs), len(queries))
 	}
 
 	// Fetch every distinct advisory once, reusing cached records that are
 	// at least as new as what querybatch reported.
 	latest := map[string]osv.VulnRef{}
-	for _, rs := range refs {
+	for i, rs := range refs {
 		for _, r := range rs {
+			if r.ID == "" {
+				return nil, fmt.Errorf("OSV query batch: missing advisory ID for component %s", comps[i].ID)
+			}
 			if cur, ok := latest[r.ID]; !ok || r.Modified.After(cur.Modified) {
 				latest[r.ID] = r
 			}
@@ -144,8 +160,7 @@ func (m *Matcher) matchLibraries(ctx context.Context, inv *inventory.Inventory) 
 		g.Go(func() error {
 			v, err := m.Advisory(gctx, id, ref)
 			if err != nil {
-				m.Log.Warn("[vulndb] Fetch advisory failed", "id", id, "err", err)
-				return nil
+				return fmt.Errorf("OSV advisory %s: %w", id, err)
 			}
 			mu.Lock()
 			details[id] = v
@@ -170,12 +185,24 @@ func (m *Matcher) matchLibraries(ctx context.Context, inv *inventory.Inventory) 
 
 // Advisory returns an OSV record, from the cache when it is fresh.
 func (m *Matcher) Advisory(ctx context.Context, id string, ref osv.VulnRef) (*v1alpha1.Vulnerability, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if v, ok := m.Cache.Get(id); ok && v.ID == id && !v.Modified.Before(ref.Modified) {
 		return v, nil
 	}
 	o, err := m.OSV.Get(ctx, id)
+	if cancelErr := cancellationError(ctx); cancelErr != nil {
+		return nil, cancelErr
+	}
 	if err != nil {
 		return nil, err
+	}
+	if o == nil || o.ID == "" {
+		return nil, fmt.Errorf("OSV advisory %s: missing record or ID", id)
+	}
+	if o.ID != id {
+		return nil, fmt.Errorf("OSV advisory %s: got mismatched ID %s", id, o.ID)
 	}
 	v := FromOSV(o)
 	if err := m.Cache.Put(v); err != nil {
@@ -184,7 +211,7 @@ func (m *Matcher) Advisory(ctx context.Context, id string, ref osv.VulnRef) (*v1
 	return v, nil
 }
 
-func (m *Matcher) matchProcesses(ctx context.Context, inv *inventory.Inventory) (map[string][]*v1alpha1.Vulnerability, []string) {
+func (m *Matcher) matchProcesses(ctx context.Context, inv *inventory.Inventory) (map[string][]*v1alpha1.Vulnerability, []string, error) {
 	out := map[string][]*v1alpha1.Vulnerability{}
 	var warnings []string
 	for _, c := range inv.Components {
@@ -192,7 +219,13 @@ func (m *Matcher) matchProcesses(ctx context.Context, inv *inventory.Inventory) 
 			continue
 		}
 		for _, vp := range c.CPEs {
+			if err := ctx.Err(); err != nil {
+				return nil, nil, err
+			}
 			cves, err := m.NVD.CVEsByCPE(ctx, nvd.CPEName(vp, c.Version))
+			if cancelErr := cancellationError(ctx); cancelErr != nil {
+				return nil, nil, cancelErr
+			}
 			if err != nil {
 				warnings = append(warnings, fmt.Sprintf("NVD %s %s: %v", vp, c.Version, err))
 				continue
@@ -206,7 +239,7 @@ func (m *Matcher) matchProcesses(ctx context.Context, inv *inventory.Inventory) 
 			}
 		}
 	}
-	return out, warnings
+	return out, warnings, nil
 }
 
 // dedupe collapses advisories describing the same issue (GHSA and GO ids
@@ -252,21 +285,36 @@ func better(a, b *v1alpha1.Vulnerability) bool {
 
 // Enrich sets KEV and EPSS data on the given advisories in place.
 func (m *Matcher) Enrich(ctx context.Context, vulns map[string]*v1alpha1.Vulnerability) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	var cves []string
 	for _, v := range vulns {
 		if v.CVE == "" {
 			continue
 		}
 		cves = append(cves, v.CVE)
-		if k, ok := m.KEV.Lookup(v.CVE); ok {
-			v.KEV = k
+		if k, ok := m.KEV.Lookup(v.CVE); ok && k != nil {
+			entry := *k
+			v.KEV = &entry
 		}
 	}
 	scores, err := m.EPSS.Scores(ctx, cves)
+	if cancelErr := cancellationError(ctx); cancelErr != nil {
+		return cancelErr
+	}
 	for _, v := range vulns {
-		if e, ok := scores[v.CVE]; ok {
-			v.EPSS = e
+		if e, ok := scores[v.CVE]; ok && e != nil {
+			score := *e
+			v.EPSS = &score
 		}
 	}
 	return err
+}
+
+// Only cancellation of the caller's context is fatal for optional providers.
+// An HTTP client's own timeout also wraps context.DeadlineExceeded, but must
+// remain an enrichment warning while the caller's context is still healthy.
+func cancellationError(ctx context.Context) error {
+	return ctx.Err()
 }

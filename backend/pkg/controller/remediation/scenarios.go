@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -34,7 +35,7 @@ type testEnv struct {
 	container string
 }
 
-func (c *Controller) environment(sc *stepContext) string {
+func (c *stepExecutor) environment(sc *stepContext) string {
 	if sc.status.Kind == v1alpha1.RemediationImage {
 		return "Docker (이미지 빌드 및 컨테이너 실행)"
 	}
@@ -49,7 +50,7 @@ func firstProject(sc *stepContext) *inventory.Project {
 	return &inventory.Project{Dir: ".", Ecosystem: sc.comp.Ecosystem}
 }
 
-func (c *Controller) scenarios(sc *stepContext) []scenario {
+func (c *stepExecutor) scenarios(sc *stepContext) []scenario {
 	name, target := sc.comp.Name, sc.status.ToVersion
 	common := []scenario{
 		{
@@ -91,7 +92,7 @@ func orNone(s string) string {
 }
 
 // runScenarios executes every scenario and returns their results.
-func (c *Controller) runScenarios(ctx context.Context, sc *stepContext) []v1alpha1.TestResult {
+func (c *stepExecutor) runScenarios(ctx context.Context, sc *stepContext) []v1alpha1.TestResult {
 	env := &testEnv{sc: sc}
 	env.inv, env.invErr = inventory.Extract(ctx, os.DirFS(sc.dir), c.Extractors, c.Log)
 	if env.invErr == nil {
@@ -124,27 +125,46 @@ func tailDetail(s string) string {
 	return s
 }
 
-// findSame finds the component with the same name and ecosystem, preferring
-// one in the same manifests, in a re-extracted inventory.
+// findSame finds the fixed counterpart of c in a re-extracted inventory.
+// Package managers may install several copies of a package (npm nests one
+// per conflicting range), and each copy is a separate component:
+//   - a direct dependency fix targets the copy the project declares, so the
+//     direct copy is verified;
+//   - a transitive fix pins every copy through overrides, so the lowest
+//     version among them is verified.
 func findSame(inv *inventory.Inventory, c *inventory.Component) *inventory.Component {
-	var fallback *inventory.Component
+	var candidates []*inventory.Component
 	for _, n := range inv.Components {
-		if n.Ecosystem != c.Ecosystem || n.Name != c.Name {
-			continue
+		if n.Ecosystem == c.Ecosystem && n.Name == c.Name && sharesLocation(n, c) {
+			candidates = append(candidates, n)
 		}
-		for _, l := range n.Locations {
-			for _, ol := range c.Locations {
-				if l == ol {
-					return n
-				}
+	}
+	if c.Direct {
+		for _, n := range candidates {
+			if n.Direct {
+				return n
 			}
 		}
-		fallback = n
 	}
-	return fallback
+	var lowest *inventory.Component
+	for _, n := range candidates {
+		if lowest == nil || version.Less(string(n.Ecosystem), strings.TrimPrefix(n.Version, "v"), strings.TrimPrefix(lowest.Version, "v")) {
+			lowest = n
+		}
+	}
+	return lowest
 }
 
-func (c *Controller) checkVersion(_ context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
+func sharesLocation(a, b *inventory.Component) bool {
+	for _, l := range a.Locations {
+		if slices.Contains(b.Locations, l) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *stepExecutor) checkVersion(_ context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
 	if env.invErr != nil {
 		return v1alpha1.TestFailed, env.invErr.Error()
 	}
@@ -158,7 +178,7 @@ func (c *Controller) checkVersion(_ context.Context, env *testEnv) (v1alpha1.Tes
 	return v1alpha1.TestPassed, fmt.Sprintf("%s@%s (%s)", env.newComp.Name, env.newComp.Version, strings.Join(env.newComp.Locations, ", "))
 }
 
-func (c *Controller) checkVulnerabilityGone(ctx context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
+func (c *stepExecutor) checkVulnerabilityGone(ctx context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
 	if env.newComp == nil {
 		return v1alpha1.TestFailed, "검증할 컴포넌트 없음"
 	}
@@ -175,7 +195,7 @@ func (c *Controller) checkVulnerabilityGone(ctx context.Context, env *testEnv) (
 	return v1alpha1.TestPassed, fmt.Sprintf("%s@%s: %s 미검출 (남은 취약점 %d건)", env.newComp.Name, env.newComp.Version, target, len(res.Vulnerabilities))
 }
 
-func (c *Controller) checkNoNewHigh(ctx context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
+func (c *stepExecutor) checkNoNewHigh(ctx context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
 	if env.newComp == nil {
 		return v1alpha1.TestFailed, "검증할 컴포넌트 없음"
 	}
@@ -200,7 +220,7 @@ func (c *Controller) checkNoNewHigh(ctx context.Context, env *testEnv) (v1alpha1
 	return v1alpha1.TestPassed, "잔여 취약점 없음"
 }
 
-func (c *Controller) runCommand(script string) func(context.Context, *testEnv) (v1alpha1.TestResultStatus, string) {
+func (c *stepExecutor) runCommand(script string) func(context.Context, *testEnv) (v1alpha1.TestResultStatus, string) {
 	return func(ctx context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
 		if script == "" {
 			return v1alpha1.TestSkipped, "이 생태계에서 실행할 명령이 정의되지 않음"
@@ -281,7 +301,7 @@ func buildCommands(root string, p *inventory.Project) (toolchain, build, test st
 // Image scenarios
 // ---------------------------------------------------------------------------
 
-func (c *Controller) checkImageBuilt(_ context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
+func (c *stepExecutor) checkImageBuilt(_ context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
 	st := env.sc.rem.Status.Step(v1alpha1.StepBuildImage)
 	if env.sc.status.Image == "" {
 		msg := "이미지 없음"
@@ -293,7 +313,7 @@ func (c *Controller) checkImageBuilt(_ context.Context, env *testEnv) (v1alpha1.
 	return v1alpha1.TestPassed, env.sc.status.Image
 }
 
-func (c *Controller) startContainer(ctx context.Context, env *testEnv) (string, error) {
+func (c *stepExecutor) startContainer(ctx context.Context, env *testEnv) (string, error) {
 	if env.container != "" {
 		return env.container, nil
 	}
@@ -312,7 +332,7 @@ func (c *Controller) startContainer(ctx context.Context, env *testEnv) (string, 
 	return env.container, nil
 }
 
-func (c *Controller) checkContainerRunning(ctx context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
+func (c *stepExecutor) checkContainerRunning(ctx context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
 	id, err := c.startContainer(ctx, env)
 	if err != nil {
 		return v1alpha1.TestFailed, err.Error()
@@ -326,7 +346,7 @@ func (c *Controller) checkContainerRunning(ctx context.Context, env *testEnv) (v
 	return v1alpha1.TestPassed, "container " + short(id) + " running"
 }
 
-func (c *Controller) execInContainer(ctx context.Context, env *testEnv, cmd []string) (v1alpha1.TestResultStatus, string) {
+func (c *stepExecutor) execInContainer(ctx context.Context, env *testEnv, cmd []string) (v1alpha1.TestResultStatus, string) {
 	if len(cmd) == 0 {
 		return v1alpha1.TestSkipped, "이 이미지에 정의된 명령 없음"
 	}
@@ -341,7 +361,7 @@ func (c *Controller) execInContainer(ctx context.Context, env *testEnv, cmd []st
 	return v1alpha1.TestPassed, out
 }
 
-func (c *Controller) checkProcessVersion(ctx context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
+func (c *stepExecutor) checkProcessVersion(ctx context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
 	known, ok := container.LookupProcess(firstImageRepo(env.sc))
 	if !ok {
 		return v1alpha1.TestSkipped, "알려진 프로세스가 아님"
@@ -353,12 +373,12 @@ func (c *Controller) checkProcessVersion(ctx context.Context, env *testEnv) (v1a
 	return status, out
 }
 
-func (c *Controller) checkConfig(ctx context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
+func (c *stepExecutor) checkConfig(ctx context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
 	known, _ := container.LookupProcess(firstImageRepo(env.sc))
 	return c.execInContainer(ctx, env, known.ConfigTestCommand)
 }
 
-func (c *Controller) checkHTTP(ctx context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
+func (c *stepExecutor) checkHTTP(ctx context.Context, env *testEnv) (v1alpha1.TestResultStatus, string) {
 	known, ok := container.LookupProcess(firstImageRepo(env.sc))
 	if !ok || known.Port == 0 {
 		return v1alpha1.TestSkipped, "HTTP 포트가 정의되지 않음"

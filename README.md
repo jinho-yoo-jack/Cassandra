@@ -31,6 +31,7 @@ In Greek myth, Cassandra foresaw disaster before it arrived. Cassandra the tool 
 - **Remediation pipeline** — branch → fix → test scenarios → sandboxed tests → review → approval → pull request. Server images additionally get image build → runtime test → deploy.
 - **Generated documentation** — every fix commits `docs/cve/<CVE>/vulnerability-details.md`, `remediation.md` and `test-scenarios.md` (with results) to the branch.
 - **SBOM first** — the SBOM is the source of truth of a scan. Download it as CycloneDX 1.6 (with vulnerabilities) or SPDX 2.3.
+- **Headless CLI + GitHub Action** — scan a checkout with the same engine, without running its code or starting a server. Export JSON, Markdown, SBOMs and SARIF, and apply an explicit CI failure policy.
 - **Kubernetes-style API** — `/apis/cassandra.io/v1alpha1` resources with list + watch, status subresources and controllers, modelled on kube-apiserver.
 
 > [!NOTE]
@@ -58,12 +59,25 @@ make run   # builds the UI and the API server, then serves both on http://127.0.
 
 Open http://127.0.0.1:8080, paste a repository URL such as `https://github.com/snyk-labs/nodejs-goof` and start the scan.
 
+### CLI and GitHub Action
+
+For scan-only use, build the CLI with the Go version in `backend/go.mod`; Node.js, Docker, git and a database are not required at runtime:
+
+```sh
+make cli
+backend/bin/cassandra scan --path . --output-dir cassandra-results --fail-on high
+```
+
+Exit codes: **0** policy passed, **1** blocking vulnerabilities, **2** incomplete scan or operational error. Unknown severity blocks enabled severity gates; `--fail-on none` never suppresses scan errors. The CLI queries public vulnerability APIs and does not execute install/build/test scripts from the checkout.
+
+The lightweight [cassandra-action](https://github.com/jinho-yoo-jack/cassandra-action) repository provides the Linux X64/ARM64 Composite Action. It downloads an exact-version CLI release from this repository, verifies its checksum, retains reports and writes a Job Summary. It does not create PRs or deploy anything. The engine is not duplicated in the Action. See [CLI/Action options, workflow examples and release instructions](docs/usage/cli-and-actions.md).
+
 ### Development
 
 ```sh
 make dev-api   # API server on :8080
 make dev-web   # Vite with hot reload on :5173, proxying /apis to :8080
-make test      # go vet + go test -race + TypeScript type check
+make test      # Go vet/race (including CLI), Node behavior tests and TypeScript checks
 ```
 
 ## How it works
@@ -73,7 +87,9 @@ flowchart LR
   UI[Web UI] -- REST + SSE watch --> API[cassandra-apiserver]
   API --> SC[Scan controller]
   API --> RC[Remediation controller]
-  SC -- clone · extract · match --> R[(SBOM + code graph)]
+  SC -- clone --> Engine[Shared scan engine]
+  CLI[CLI / GitHub Action] --> Engine
+  Engine -- extract · match --> R[(SBOM + code graph)]
   FS[Feed syncer<br/>OSV · NVD · KEV · GitHub webhook] -- affected packages --> SC
   RC -- sandboxed build & test --> D[Docker]
   RC -- push & pull request --> GH[GitHub]

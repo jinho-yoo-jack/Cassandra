@@ -6,7 +6,6 @@ package remediation
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -15,17 +14,9 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/deploy"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/fixer"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/git"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/github"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/report"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/runner"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/storage"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/watch"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/workspace"
 )
 
 // pipelines lists the steps of each remediation kind in order.
@@ -40,34 +31,24 @@ var pipelines = map[v1alpha1.RemediationKind][]v1alpha1.StepName{
 	},
 }
 
-// Config holds the controller's collaborators.
-type Config struct {
-	Remediations storage.Interface[*v1alpha1.Remediation]
-	Reports      *report.Store
-	Matcher      *vulndb.Matcher
-	Extractors   []inventory.Extractor
-	Layout       workspace.Layout
-	Runner       runner.Runner
-	Docker       *runner.DockerCLI
-	Toolchains   fixer.Toolchains
-	GitHub       *github.Client
-	Author       git.Signature
-	Deployer     *deploy.Deployer
-	Log          *slog.Logger
-	// CloneURL overrides clone URLs (tests).
-	CloneURL func(github.RepoRef) string
-}
-
 // Controller reconciles Remediations.
 type Controller struct {
-	Config
-	queue workqueue.TypedRateLimitingInterface[string]
+	remediations RemediationStore
+	executor     StepExecutor
+	log          *slog.Logger
+	queue        workqueue.TypedRateLimitingInterface[string]
 }
 
 // NewController returns a controller.
 func NewController(cfg Config) *Controller {
+	executor := cfg.Executor
+	if executor == nil {
+		executor = newStepExecutor(cfg)
+	}
 	return &Controller{
-		Config: cfg,
+		remediations: cfg.Remediations,
+		executor:     executor,
+		log:          cfg.Log,
 		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.DefaultTypedControllerRateLimiter[string](),
 			workqueue.TypedRateLimitingQueueConfig[string]{Name: "remediation"},
@@ -78,22 +59,22 @@ func NewController(cfg Config) *Controller {
 // Run starts workers and blocks until ctx is cancelled.
 func (c *Controller) Run(ctx context.Context, workers int) {
 	defer c.queue.ShutDown()
-	c.Log.Info("[remediation-controller] Starting", "workers", workers)
+	c.log.Info("[remediation-controller] Starting", "workers", workers)
 	if err := c.recoverInterrupted(ctx); err != nil {
-		c.Log.Error("[remediation-controller] Recover failed", "err", err)
+		c.log.Error("[remediation-controller] Recover failed", "err", err)
 	}
 	go c.watchLoop(ctx)
 	for range workers {
 		go wait.UntilWithContext(ctx, c.runWorker, time.Second)
 	}
 	<-ctx.Done()
-	c.Log.Info("[remediation-controller] Stopping")
+	c.log.Info("[remediation-controller] Stopping")
 }
 
 // recoverInterrupted resets steps left Running by a previous process so
 // they are executed again. Every step is written to be re-runnable.
 func (c *Controller) recoverInterrupted(ctx context.Context) error {
-	items, _, err := c.Remediations.List(ctx)
+	items, _, err := c.remediations.List(ctx)
 	if err != nil {
 		return err
 	}
@@ -101,7 +82,7 @@ func (c *Controller) recoverInterrupted(ctx context.Context) error {
 		if r.Status.Phase.IsTerminal() {
 			continue
 		}
-		_, err := c.Remediations.GuaranteedUpdate(ctx, r.Name, func(cur *v1alpha1.Remediation) (*v1alpha1.Remediation, error) {
+		_, err := c.remediations.GuaranteedUpdate(ctx, r.Name, func(cur *v1alpha1.Remediation) (*v1alpha1.Remediation, error) {
 			for i := range cur.Status.Steps {
 				if cur.Status.Steps[i].State == v1alpha1.StepRunning {
 					cur.Status.Steps[i].State, cur.Status.Steps[i].Message = v1alpha1.StepPending, "Restarted after interruption"
@@ -118,9 +99,9 @@ func (c *Controller) recoverInterrupted(ctx context.Context) error {
 
 func (c *Controller) watchLoop(ctx context.Context) {
 	for ctx.Err() == nil {
-		w, err := c.Remediations.Watch(ctx, true)
+		w, err := c.remediations.Watch(ctx, true)
 		if err != nil {
-			c.Log.Error("[remediation-controller] Watch failed", "err", err)
+			c.log.Error("[remediation-controller] Watch failed", "err", err)
 			time.Sleep(time.Second)
 			continue
 		}
@@ -160,38 +141,20 @@ func (c *Controller) processNextItem(ctx context.Context) bool {
 	defer c.queue.Done(key)
 	if err := c.sync(ctx, key); err != nil && ctx.Err() == nil {
 		if c.queue.NumRequeues(key) < 5 {
-			c.Log.Warn("[remediation-controller] Sync failed, requeueing", "remediation", key, "err", err)
+			c.log.Warn("[remediation-controller] Sync failed, requeueing", "remediation", key, "err", err)
 			c.queue.AddRateLimited(key)
 			return true
 		}
-		c.Log.Error("[remediation-controller] Dropping remediation", "remediation", key, "err", err)
+		c.log.Error("[remediation-controller] Dropping remediation", "remediation", key, "err", err)
 	}
 	c.queue.Forget(key)
 	return true
 }
 
-// stepOutcome is the result of one step.
-type stepOutcome struct {
-	state   v1alpha1.StepState
-	message string
-	log     string
-	// fatal stops the pipeline; non-fatal failures (failed tests) continue
-	// to the review so a human decides.
-	fatal bool
-}
-
-func succeeded(msg string) stepOutcome {
-	return stepOutcome{state: v1alpha1.StepSucceeded, message: msg}
-}
-func skipped(msg string) stepOutcome { return stepOutcome{state: v1alpha1.StepSkipped, message: msg} }
-func fatal(err error, log string) stepOutcome {
-	return stepOutcome{state: v1alpha1.StepFailed, message: err.Error(), log: log, fatal: true}
-}
-
 // sync advances one remediation until it waits for review or finishes.
 func (c *Controller) sync(ctx context.Context, name string) error {
 	for {
-		rem, err := c.Remediations.Get(ctx, name)
+		rem, err := c.remediations.Get(ctx, name)
 		if storage.IsNotFound(err) {
 			return nil
 		}
@@ -233,10 +196,6 @@ func (c *Controller) sync(ctx context.Context, name string) error {
 			})
 		}
 
-		sc, err := c.loadContext(ctx, rem)
-		if err != nil {
-			return c.finish(ctx, name, step.Name, fatal(err, ""))
-		}
 		now := time.Now().UTC()
 		if err := c.update(ctx, name, func(s *v1alpha1.RemediationStatus) {
 			st := s.Step(step.Name)
@@ -245,15 +204,15 @@ func (c *Controller) sync(ctx context.Context, name string) error {
 		}); err != nil {
 			return err
 		}
-		c.Log.Info("[remediation-controller] Step started", "remediation", name, "step", step.Name)
-		out := c.runStep(ctx, step.Name, sc)
+		c.log.Info("[remediation-controller] Step started", "remediation", name, "step", step.Name)
+		out := c.executor.Execute(ctx, step.Name, rem)
 		if ctx.Err() != nil {
 			return ctx.Err() // shutting down; recoverInterrupted re-runs the step
 		}
-		if err := c.finishWithStatus(ctx, name, step.Name, out, sc.status); err != nil {
+		if err := c.finishWithStatus(ctx, name, step.Name, out, out.Status); err != nil {
 			return err
 		}
-		if out.fatal {
+		if out.Fatal {
 			return nil
 		}
 	}
@@ -269,47 +228,17 @@ func nextStep(s *v1alpha1.RemediationStatus) *v1alpha1.RemediationStep {
 	return nil
 }
 
-func (c *Controller) runStep(ctx context.Context, name v1alpha1.StepName, sc *stepContext) (out stepOutcome) {
-	defer func() {
-		if r := recover(); r != nil {
-			out = fatal(fmt.Errorf("step panicked: %v", r), "")
-		}
-	}()
-	switch name {
-	case v1alpha1.StepCreateBranch:
-		return c.createBranch(ctx, sc)
-	case v1alpha1.StepApplyFix:
-		return c.applyFix(ctx, sc)
-	case v1alpha1.StepWriteTestScenarios:
-		return c.writeTestScenarios(ctx, sc)
-	case v1alpha1.StepBuildImage:
-		return c.buildImage(ctx, sc)
-	case v1alpha1.StepTest:
-		return c.test(ctx, sc)
-	case v1alpha1.StepDeploy:
-		return c.deploy(ctx, sc)
-	case v1alpha1.StepPullRequest:
-		return c.pullRequest(ctx, sc)
-	}
-	return fatal(fmt.Errorf("unknown step %s", name), "")
-}
-
 func (c *Controller) update(ctx context.Context, name string, mutate func(*v1alpha1.RemediationStatus)) error {
-	_, err := c.Remediations.GuaranteedUpdate(ctx, name, func(cur *v1alpha1.Remediation) (*v1alpha1.Remediation, error) {
+	_, err := c.remediations.GuaranteedUpdate(ctx, name, func(cur *v1alpha1.Remediation) (*v1alpha1.Remediation, error) {
 		mutate(&cur.Status)
 		return cur, nil
 	})
 	return err
 }
 
-// finish records a step outcome without other status changes.
-func (c *Controller) finish(ctx context.Context, name string, step v1alpha1.StepName, out stepOutcome) error {
-	return c.finishWithStatus(ctx, name, step, out, nil)
-}
-
 // finishWithStatus records a step outcome and the status fields the step
 // produced (branch, docs, results...).
-func (c *Controller) finishWithStatus(ctx context.Context, name string, step v1alpha1.StepName, out stepOutcome, produced *v1alpha1.RemediationStatus) error {
+func (c *Controller) finishWithStatus(ctx context.Context, name string, step v1alpha1.StepName, out StepResult, produced *v1alpha1.RemediationStatus) error {
 	return c.update(ctx, name, func(s *v1alpha1.RemediationStatus) {
 		if produced != nil {
 			s.Branch, s.Commit, s.ToVersion, s.Docs = produced.Branch, produced.Commit, produced.ToVersion, produced.Docs
@@ -318,9 +247,9 @@ func (c *Controller) finishWithStatus(ctx context.Context, name string, step v1a
 		}
 		now := time.Now().UTC()
 		st := s.Step(step)
-		st.State, st.Message, st.Log, st.CompletionTime = out.state, out.message, runner.Tail(out.log), &now
-		if out.fatal {
-			s.Phase, s.Message = v1alpha1.RemediationFailed, fmt.Sprintf("%s failed: %s", step, out.message)
+		st.State, st.Message, st.Log, st.CompletionTime = out.State, out.Message, runner.Tail(out.Log), &now
+		if out.Fatal {
+			s.Phase, s.Message = v1alpha1.RemediationFailed, fmt.Sprintf("%s failed: %s", step, out.Message)
 			for i := range s.Steps {
 				if s.Steps[i].State == v1alpha1.StepPending {
 					s.Steps[i].State = v1alpha1.StepSkipped
@@ -329,6 +258,3 @@ func (c *Controller) finishWithStatus(ctx context.Context, name string, step v1a
 		}
 	})
 }
-
-// isManual reports whether a fixer could not handle the case automatically.
-func isManual(err error) bool { return errors.Is(err, fixer.ErrManual) }

@@ -65,6 +65,7 @@ func Build(name string, r *report.Report) *v1alpha1.ScanGraph {
 		slices.SortFunc(n.Findings, func(a, b v1alpha1.NodeFinding) int { return b.Severity.Rank() - a.Severity.Rank() })
 		if len(n.Findings) > 0 {
 			n.Severity = n.Findings[0].Severity
+			n.FixTarget = r.FixTarget(c.ID)
 		}
 		b.node(n)
 	}

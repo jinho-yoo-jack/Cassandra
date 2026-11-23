@@ -323,6 +323,8 @@ type GraphNode struct {
 	// Severity is the worst severity among Findings.
 	Severity Severity      `json:"severity,omitempty"`
 	Findings []NodeFinding `json:"findings,omitempty"`
+	// FixTarget is the version a remediation of this node upgrades to.
+	FixTarget string `json:"fixTarget,omitempty"`
 	// OnVulnerablePath marks nodes from which a vulnerable component is
 	// reachable, so clients can render only the paths that matter.
 	OnVulnerablePath bool `json:"onVulnerablePath,omitempty"`

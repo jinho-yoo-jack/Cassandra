@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node --experimental-test-module-mocks --import ./tests/register-ts.mjs --test tests/*.test.mjs",
     "build": "tsc -p tsconfig.json && vite build",
     "typecheck": "tsc -p tsconfig.json",
     "preview": "vite preview"

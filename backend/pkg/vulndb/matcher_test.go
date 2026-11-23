@@ -6,12 +6,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
+
 	"strings"
 	"testing"
 
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/storage/boltstore"
+
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/epss"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/kev"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/nvd"
@@ -66,10 +66,10 @@ func fakeServers(t *testing.T) (*osv.Client, *nvd.Client, *kev.Catalog, *epss.Cl
 	})
 	mux.HandleFunc("GET /nvd", func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.RawQuery, "f5%3Anginx%3A1.25.3") {
-			w.Write([]byte(`{"totalResults":0,"vulnerabilities":[]}`))
+			w.Write([]byte(`{"startIndex":0,"resultsPerPage":0,"totalResults":0,"vulnerabilities":[]}`))
 			return
 		}
-		w.Write([]byte(`{"totalResults":1,"vulnerabilities":[{"cve":{"id":"CVE-2024-7347","published":"2024-08-14T15:15:00.000",
+		w.Write([]byte(`{"startIndex":0,"resultsPerPage":1,"totalResults":1,"vulnerabilities":[{"cve":{"id":"CVE-2024-7347","published":"2024-08-14T15:15:00.000",
 			"descriptions":[{"lang":"en","value":"NGINX ngx_http_mp4_module flaw. More text."}],
 			"metrics":{"cvssMetricV31":[{"type":"Primary","cvssData":{"version":"3.1","vectorString":"CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:N/I:N/A:H","baseScore":4.7}}]},
 			"configurations":[{"nodes":[{"cpeMatch":[{"vulnerable":true,"criteria":"cpe:2.3:a:f5:nginx:*:*:*:*:open_source:*:*:*","versionStartIncluding":"1.5.13","versionEndExcluding":"1.27.1"}]}]}]}}]}`))
@@ -98,14 +98,13 @@ func fakeServers(t *testing.T) (*osv.Client, *nvd.Client, *kev.Catalog, *epss.Cl
 }
 
 func TestMatch(t *testing.T) {
+	t.Run("bolt", func(t *testing.T) { testMatchWithCache(t, newBoltCache(t)) })
+	t.Run("memory", func(t *testing.T) { testMatchWithCache(t, NewMemoryCache()) })
+}
+
+func testMatchWithCache(t *testing.T, cache AdvisoryCache) {
 	o, n, k, e := fakeServers(t)
-	db, err := boltstore.Open(filepath.Join(t.TempDir(), "db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	blobs, _ := boltstore.NewBlobs(db, "vulns")
-	m := &Matcher{OSV: o, NVD: n, KEV: k, EPSS: e, Cache: NewCache(blobs), Log: slog.Default()}
+	m := &Matcher{OSV: o, NVD: n, KEV: k, EPSS: e, Cache: cache, Log: slog.Default()}
 
 	log4j := inventory.NewLibrary(inventory.Maven, "org.apache.logging.log4j:log4j-core", "2.14.1", "pom.xml", true, false)
 	gin := inventory.NewLibrary(inventory.Go, "github.com/gin-gonic/gin", "v1.9.0", "go.mod", false, false)
@@ -151,5 +150,12 @@ func TestMatch(t *testing.T) {
 	}
 	if _, ok := m.Cache.Get("CVE-2021-44228"); !ok {
 		t.Error("advisory not cached under its CVE alias")
+	}
+	if raw, _ := m.Cache.Get(l.ID); raw.KEV != nil || raw.EPSS != nil {
+		t.Fatal("matching enriched the raw cache")
+	}
+	sub, err := m.MatchComponents(context.Background(), inv, []string{gin.ID})
+	if err != nil || len(sub.Findings) != 1 || sub.Findings[0].ComponentID != gin.ID || sub.Findings[0].FixedVersion != "v1.9.1" {
+		t.Fatalf("restricted matching changed: result=%+v error=%v", sub, err)
 	}
 }

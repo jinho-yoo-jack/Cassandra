@@ -41,6 +41,12 @@ func parsePackageLock(data []byte, pkg *packageJSON, b *builder) error {
 	if err := json.Unmarshal(data, &lock); err != nil {
 		return err
 	}
+	if lock.LockfileVersion < 1 || lock.LockfileVersion > 3 {
+		return fmt.Errorf("package lock: missing or unsupported lockfileVersion")
+	}
+	if lock.LockfileVersion >= 2 && lock.Packages == nil {
+		return fmt.Errorf("package lock: missing packages map")
+	}
 	if len(lock.Packages) > 0 {
 		parsePackageLockV2(&lock, b)
 		return nil
@@ -55,6 +61,9 @@ func parsePackageLock(data []byte, pkg *packageJSON, b *builder) error {
 func parsePackageLockV2(lock *packageLock, b *builder) {
 	idOf := map[string]string{}
 	for key, e := range lock.Packages {
+		if key != "" && !e.Link && strings.Contains(key, "node_modules/") && e.Version == "" {
+			b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("package lock: %s has no resolved version", key))
+		}
 		if key == "" || e.Link || !strings.Contains(key, "node_modules/") || e.Version == "" {
 			continue
 		}
@@ -100,9 +109,11 @@ func parsePackageLockV2(lock *packageLock, b *builder) {
 		if !ok {
 			continue
 		}
-		for name := range deps {
+		for name, spec := range deps {
 			if id, ok := resolve(key, name); ok {
 				b.edge(from, id)
+			} else if !localDependency(spec) {
+				b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("package lock: %s dependency %s is unresolved", key, name))
 			}
 		}
 	}
@@ -153,6 +164,10 @@ func parsePackageLockV1(lock *packageLock, pkg *packageJSON, b *builder) {
 	}
 	walk = func(s *scope) {
 		for name, d := range s.deps {
+			if d.Version == "" {
+				b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("package lock: %s has no resolved version", name))
+				continue
+			}
 			s.ids[name] = b.component(name, d.Version, d.Dev).ID
 		}
 		for name, d := range s.deps {
@@ -225,6 +240,9 @@ func parsePnpmLock(data []byte, _ *packageJSON, b *builder) error {
 	if err := yaml.Unmarshal(data, &lock); err != nil {
 		return err
 	}
+	if lock.LockfileVersion == nil {
+		return fmt.Errorf("pnpm lock: missing lockfileVersion")
+	}
 	// v9 keeps the dependency graph in snapshots, v6 in packages.
 	graph := lock.Snapshots
 	if len(graph) == 0 {
@@ -234,7 +252,8 @@ func parsePnpmLock(data []byte, _ *packageJSON, b *builder) error {
 	ids := map[string]string{} // name@version -> component ID
 	for key, p := range graph {
 		name, version, ok := splitPnpmKey(key)
-		if !ok {
+		if !ok || version == "" {
+			b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("pnpm lock: invalid or unresolved package key %q", key))
 			continue
 		}
 		dev := p.Dev != nil && *p.Dev
@@ -262,6 +281,8 @@ func parsePnpmLock(data []byte, _ *packageJSON, b *builder) error {
 			}
 			if id, ok := lookup(dn, dv); ok {
 				b.edge(from, id)
+			} else if !localDependency(dv) {
+				b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("pnpm lock: %s dependency %s is unresolved", key, dn))
 			}
 		}
 	}
@@ -326,18 +347,24 @@ func parseYarnLock(data []byte, pkg *packageJSON, b *builder) error {
 	}
 	ids := map[*yarnEntry]string{}
 	for _, e := range entries {
+		if e.name == "" || e.entry.version == "" {
+			b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("yarn lock: package %q has no resolved version", e.name))
+			continue
+		}
 		ids[e.entry] = b.component(e.name, e.entry.version, false).ID
 	}
 	for _, e := range entries {
 		for dn, dr := range e.entry.deps {
-			if t, ok := lookup(dn, dr); ok {
+			if t, ok := lookup(dn, dr); ok && ids[t] != "" {
 				b.edge(ids[e.entry], ids[t])
+			} else if !localDependency(dr) {
+				b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("yarn lock: %s dependency %s is unresolved", e.name, dn))
 			}
 		}
 	}
 	addRoot := func(deps map[string]string, dev bool) {
 		for n, r := range deps {
-			if t, ok := lookup(n, r); ok {
+			if t, ok := lookup(n, r); ok && ids[t] != "" {
 				c := b.comps[ids[t]]
 				c.Direct = true
 				c.Dev = c.Dev && dev
@@ -380,6 +407,9 @@ func parseYarnEntries(data []byte) ([]namedYarnEntry, map[string]*yarnEntry, err
 		switch {
 		case indent == 0:
 			inDeps = false
+			if !strings.HasSuffix(trimmed, ":") {
+				return nil, nil, fmt.Errorf("yarn lock: malformed entry header")
+			}
 			header := strings.TrimSuffix(trimmed, ":")
 			if header == "__metadata" {
 				cur = nil
@@ -431,6 +461,9 @@ func splitYarnField(s string) (string, string) {
 
 // descriptorName returns the package name of "@s/n@npm:^1" or "n@^1".
 func descriptorName(d string) string {
+	if len(d) < 2 {
+		return ""
+	}
 	at := strings.IndexByte(d[1:], '@')
 	if at < 0 {
 		return d

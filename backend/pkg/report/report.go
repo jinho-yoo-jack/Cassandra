@@ -4,12 +4,14 @@
 package report
 
 import (
+	"strings"
 	"time"
 
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/codegraph"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/storage/boltstore"
+
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/version"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb"
 )
 
@@ -61,6 +63,26 @@ func (r *Report) FindingsFor(componentID string) []v1alpha1.Finding {
 	return out
 }
 
+// FixTarget is the version a remediation of the component upgrades to: the
+// highest fixed version among its findings, so one bump resolves all of them.
+// It returns "" when no finding has a fix.
+func (r *Report) FixTarget(componentID string) string {
+	c := r.Inventory.Component(componentID)
+	if c == nil {
+		return ""
+	}
+	var target string
+	for _, f := range r.FindingsFor(componentID) {
+		if f.FixedVersion == "" {
+			continue
+		}
+		if target == "" || version.Less(string(c.Ecosystem), strings.TrimPrefix(target, "v"), strings.TrimPrefix(f.FixedVersion, "v")) {
+			target = f.FixedVersion
+		}
+	}
+	return target
+}
+
 // Finding returns the finding binding a component to a vulnerability.
 func (r *Report) Finding(componentID, vulnerabilityID string) (v1alpha1.Finding, bool) {
 	for _, f := range r.Match.Findings {
@@ -70,29 +92,3 @@ func (r *Report) Finding(componentID, vulnerabilityID string) (v1alpha1.Finding,
 	}
 	return v1alpha1.Finding{}, false
 }
-
-// Store persists reports by scan name.
-type Store struct {
-	blobs *boltstore.Blobs
-}
-
-// NewStore returns a report store.
-func NewStore(blobs *boltstore.Blobs) *Store { return &Store{blobs: blobs} }
-
-// Get loads a report.
-func (s *Store) Get(name string) (*Report, error) {
-	var r Report
-	if err := s.blobs.Get(name, &r); err != nil {
-		return nil, err
-	}
-	return &r, nil
-}
-
-// Put saves a report.
-func (s *Store) Put(name string, r *Report) error { return s.blobs.Put(name, r) }
-
-// Delete removes a report.
-func (s *Store) Delete(name string) error { return s.blobs.Delete(name) }
-
-// Names lists every stored report.
-func (s *Store) Names() ([]string, error) { return s.blobs.Keys() }

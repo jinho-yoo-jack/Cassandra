@@ -18,7 +18,7 @@ export function ScanPage({ name }: { name: string }) {
     queryKey: ["graph", name, evaluated],
     queryFn: () => api.getGraph(name),
     enabled: phase === "Succeeded",
-    placeholderData: (prev) => prev,
+    placeholderData: (prev, previousQuery) => previousQuery?.queryKey[1] === name ? prev : undefined,
   });
 
   if (scan.error) return <p className="p-6 text-destructive">{scan.error.message}</p>;

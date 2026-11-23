@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"path"
 	"regexp"
 	"strings"
@@ -25,7 +26,7 @@ var requirementsFile = regexp.MustCompile(`(^|/)(requirements[^/]*\.txt|requirem
 
 func (Extractor) FileRequired(p string) bool {
 	switch path.Base(p) {
-	case "pyproject.toml", "Pipfile.lock":
+	case "pyproject.toml", "Pipfile", "Pipfile.lock":
 		return true
 	}
 	return requirementsFile.MatchString(p)
@@ -37,6 +38,8 @@ func (e Extractor) Extract(ctx context.Context, in *inventory.Input) (*inventory
 		return e.pyproject(in)
 	case "Pipfile.lock":
 		return e.pipfileLock(in)
+	case "Pipfile":
+		return e.pipfile(in)
 	default:
 		return e.requirements(in)
 	}
@@ -92,14 +95,28 @@ func (Extractor) requirements(in *inventory.Input) (*inventory.Result, error) {
 	b := newBuilder(newProject(in, in.Path))
 	dev := strings.Contains(path.Base(in.Path), "dev") || strings.Contains(path.Base(in.Path), "test")
 	sc := bufio.NewScanner(bytes.NewReader(data))
+	lineNo := 0
 	for sc.Scan() {
+		lineNo++
 		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "-") || strings.Contains(line, "://") {
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "-") || strings.Contains(line, "://") {
+			b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("line %d: unsupported requirement directive, include or URL; dependency resolution incomplete", lineNo))
 			continue
 		}
 		m := requirementLine.FindStringSubmatch(line)
-		if m == nil || m[4] == "" {
+		if m == nil {
+			b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("line %d: malformed requirement", lineNo))
 			continue
+		}
+		if m[3] == "" || m[4] == "" || strings.ContainsAny(m[4], "*<>=!~@") {
+			b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("line %d: dependency %s has no resolved version", lineNo, m[1]))
+			continue
+		}
+		if m[3] != "==" && m[3] != "===" {
+			b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("line %d: dependency %s is a range, not a resolved version; using declared lower bound", lineNo, m[1]))
 		}
 		b.add(m[1], m[4], true, dev)
 	}
@@ -124,7 +141,7 @@ type pyprojectFile struct {
 }
 
 // declared returns normalised direct dependency names mapped to "is dev".
-func (p *pyprojectFile) declared() map[string]bool {
+func (p *pyprojectFile) declared(b *builder) map[string]bool {
 	out := map[string]bool{}
 	add := func(spec string, dev bool) {
 		if m := requirementLine.FindStringSubmatch(spec); m != nil {
@@ -132,6 +149,8 @@ func (p *pyprojectFile) declared() map[string]bool {
 			if cur, ok := out[n]; !ok || cur {
 				out[n] = dev
 			}
+		} else {
+			b.res.Warnings = append(b.res.Warnings, "malformed dependency declaration in pyproject.toml")
 		}
 	}
 	for _, d := range p.Project.Dependencies {
@@ -146,6 +165,8 @@ func (p *pyprojectFile) declared() map[string]bool {
 		for _, d := range ds {
 			if s, ok := d.(string); ok {
 				add(s, true)
+			} else {
+				b.res.Warnings = append(b.res.Warnings, "unsupported dependency group include; resolution incomplete")
 			}
 		}
 	}
@@ -194,8 +215,8 @@ func (Extractor) pyproject(in *inventory.Input) (*inventory.Result, error) {
 		name = in.Dir()
 	}
 	proj := newProject(in, name)
-	declared := py.declared()
 	b := newBuilder(proj)
+	declared := py.declared(b)
 
 	for _, lockName := range []string{"uv.lock", "poetry.lock"} {
 		lp := in.Sibling(lockName)
@@ -207,16 +228,27 @@ func (Extractor) pyproject(in *inventory.Input) (*inventory.Result, error) {
 			return nil, err
 		}
 		var lock lockFile
-		if _, err := toml.Decode(string(lockData), &lock); err != nil {
+		meta, err := toml.Decode(string(lockData), &lock)
+		if err != nil {
 			return nil, err
 		}
+		if !meta.IsDefined("package") && !meta.IsDefined("version") && !meta.IsDefined("metadata") {
+			return nil, fmt.Errorf("%s: missing lock structure (package/version/metadata)", lockName)
+		}
 		proj.Lockfile = lp
+		resolved := map[string]bool{}
 		self := inventory.NormalizePyPI(name)
 		for _, p := range lock.Package {
 			n := inventory.NormalizePyPI(p.Name)
 			if n == self || isLocalSource(p.Source) {
+				resolved[n] = true
 				continue
 			}
+			if p.Name == "" || p.Version == "" {
+				b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("%s: package %q has no resolved name/version", lockName, p.Name))
+				continue
+			}
+			resolved[n] = true
 			dev, direct := declared[n]
 			b.add(p.Name, p.Version, direct, direct && dev || p.Category == "dev")
 		}
@@ -228,13 +260,23 @@ func (Extractor) pyproject(in *inventory.Input) (*inventory.Result, error) {
 				b.edge(p.Name, dep)
 			}
 		}
+		for n := range declared {
+			if !resolved[n] {
+				b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("declared dependency %s is not resolved by %s", n, lockName))
+			}
+		}
 		return b.res, nil
+	}
+	for n := range declared {
+		b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("dependency %s has no lockfile-resolved version", n))
 	}
 
 	// No lockfile: use the lower bounds of declared ranges.
 	for _, spec := range py.Project.Dependencies {
-		if m := requirementLine.FindStringSubmatch(spec); m != nil && m[4] != "" {
-			b.add(m[1], inventory.VersionFromRange(m[4]), true, false)
+		if m := requirementLine.FindStringSubmatch(spec); m != nil && m[3] != "" {
+			if v := inventory.VersionFromRange(m[4]); v != "" {
+				b.add(m[1], v, true, false)
+			}
 		}
 	}
 	for n, v := range py.Tool.Poetry.Dependencies {
@@ -290,23 +332,74 @@ func (Extractor) pipfileLock(in *inventory.Input) (*inventory.Result, error) {
 	var lock struct {
 		Default map[string]struct {
 			Version string `json:"version"`
+			Path    string `json:"path"`
 		} `json:"default"`
 		Develop map[string]struct {
 			Version string `json:"version"`
+			Path    string `json:"path"`
 		} `json:"develop"`
 	}
 	if err := json.Unmarshal(data, &lock); err != nil {
 		return nil, err
 	}
+	if lock.Default == nil && lock.Develop == nil {
+		return nil, fmt.Errorf("Pipfile.lock: missing default/develop dependency maps")
+	}
 	b := newBuilder(newProject(in, in.Dir()))
 	for n, p := range lock.Default {
-		if v := strings.TrimLeft(p.Version, "=="); v != "" {
+		if p.Path != "" {
+			continue
+		}
+		if v := strings.TrimPrefix(p.Version, "=="); strings.HasPrefix(p.Version, "==") && v != "" && !strings.ContainsAny(v, "*<>=!~") {
 			b.add(n, v, true, false)
+		} else {
+			b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("Pipfile.lock: dependency %s has no resolved version", n))
 		}
 	}
 	for n, p := range lock.Develop {
-		if v := strings.TrimLeft(p.Version, "=="); v != "" {
+		if p.Path != "" {
+			continue
+		}
+		if v := strings.TrimPrefix(p.Version, "=="); strings.HasPrefix(p.Version, "==") && v != "" && !strings.ContainsAny(v, "*<>=!~") {
 			b.add(n, v, true, true)
+		} else {
+			b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("Pipfile.lock: dependency %s has no resolved version", n))
+		}
+	}
+	return b.res, nil
+}
+
+func (e Extractor) pipfile(in *inventory.Input) (*inventory.Result, error) {
+	data, err := in.Read()
+	if err != nil {
+		return nil, err
+	}
+	var manifest struct {
+		Packages    map[string]any `toml:"packages"`
+		DevPackages map[string]any `toml:"dev-packages"`
+	}
+	if _, err := toml.Decode(string(data), &manifest); err != nil {
+		return nil, err
+	}
+	b := newBuilder(newProject(in, in.Dir()))
+	resolved := map[string]bool{}
+	if lp := in.Sibling("Pipfile.lock"); in.Exists(lp) {
+		lock, err := e.pipfileLock(&inventory.Input{FS: in.FS, Path: lp})
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range lock.Components {
+			resolved[inventory.NormalizePyPI(c.Name)] = true
+		}
+	}
+	for _, deps := range []map[string]any{manifest.Packages, manifest.DevPackages} {
+		for n, spec := range deps {
+			if src, ok := spec.(map[string]any); ok && isLocalSource(src) {
+				continue
+			}
+			if !resolved[inventory.NormalizePyPI(n)] {
+				b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("dependency %s has no Pipfile.lock-resolved version", n))
+			}
 		}
 	}
 	return b.res, nil

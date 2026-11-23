@@ -3,7 +3,9 @@ package kev
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -47,8 +49,14 @@ func (c *Catalog) Refresh(ctx context.Context) (added []string, version string, 
 	if err := httpjson.Get(ctx, c.HTTP, c.URL, nil, &f); err != nil {
 		return nil, "", err
 	}
+	if f.Vulnerabilities == nil {
+		return nil, "", fmt.Errorf("kev: missing vulnerabilities array")
+	}
 	entries := make(map[string]v1alpha1.KEV, len(f.Vulnerabilities))
 	for _, v := range f.Vulnerabilities {
+		if strings.TrimSpace(v.CVEID) == "" {
+			return nil, "", fmt.Errorf("kev: missing CVE ID")
+		}
 		entries[v.CVEID] = v1alpha1.KEV{
 			DateAdded: v.DateAdded, DueDate: v.DueDate, RequiredAction: v.RequiredAction,
 			KnownRansomware: v.KnownRansomwareCampaignUse == "Known",

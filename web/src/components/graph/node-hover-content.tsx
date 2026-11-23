@@ -117,9 +117,20 @@ function FindingItem({ node, finding }: { node: GraphNode; finding: NodeFinding 
           {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
           상세 정보
         </button>
-        <Button size="sm" disabled={!finding.fixedVersion || remediate.isPending} onClick={() => remediate.mutate()} title={finding.fixedVersion ? `${finding.fixedVersion}로 조치` : "패치 버전이 없습니다"}>
+        <Button
+          size="sm"
+          disabled={!finding.fixedVersion || remediate.isPending}
+          onClick={() => remediate.mutate()}
+          title={
+            !finding.fixedVersion
+              ? "패치 버전이 없습니다"
+              : node.fixTarget && node.fixTarget !== finding.fixedVersion
+                ? `이 취약점은 ${finding.fixedVersion}에서 수정되지만, 이 컴포넌트의 다른 취약점까지 함께 해결하도록 ${node.fixTarget}로 올립니다`
+                : `${finding.fixedVersion}로 조치`
+          }
+        >
           {remediate.isPending ? <LoaderCircle className="animate-spin" /> : <Wrench />}
-          {finding.fixedVersion ? `조치 → ${finding.fixedVersion}` : "패치 없음"}
+          {finding.fixedVersion ? `조치 → ${node.fixTarget ?? finding.fixedVersion}` : "패치 없음"}
         </Button>
       </div>
 

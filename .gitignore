@@ -3,3 +3,8 @@ web/node_modules/
 web/dist/
 .DS_Store
 .omc/
+/dist/
+/cassandra-results/
+.env
+.env.*
+!.env.example

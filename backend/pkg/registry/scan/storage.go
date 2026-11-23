@@ -26,13 +26,18 @@ import (
 const resource = v1alpha1.ResourceScans
 
 // REST implements the scans collection.
+type ReportRepository interface {
+	report.Reader
+	Delete(string) error
+}
+
 type REST struct {
 	store   storage.Interface[*v1alpha1.Scan]
-	reports *report.Store
+	reports ReportRepository
 }
 
 // NewREST returns the scans storage and its subresources.
-func NewREST(store storage.Interface[*v1alpha1.Scan], reports *report.Store) (*REST, *GraphREST, *SBOMREST) {
+func NewREST(store storage.Interface[*v1alpha1.Scan], reports ReportRepository) (*REST, *GraphREST, *SBOMREST) {
 	return &REST{store: store, reports: reports}, &GraphREST{store: store, reports: reports}, &SBOMREST{reports: reports}
 }
 
@@ -118,7 +123,7 @@ func (r *REST) Delete(ctx context.Context, name string) (any, error) {
 }
 
 // loadReport returns the report of a succeeded scan.
-func loadReport(ctx context.Context, store storage.Interface[*v1alpha1.Scan], reports *report.Store, name string) (*report.Report, error) {
+func loadReport(ctx context.Context, store storage.Interface[*v1alpha1.Scan], reports report.Reader, name string) (*report.Report, error) {
 	s, err := store.Get(ctx, name)
 	if err != nil {
 		return nil, apierrors.FromStorage(err, resource, name)
@@ -136,7 +141,7 @@ func loadReport(ctx context.Context, store storage.Interface[*v1alpha1.Scan], re
 // GraphREST serves scans/{name}/graph.
 type GraphREST struct {
 	store   storage.Interface[*v1alpha1.Scan]
-	reports *report.Store
+	reports report.Reader
 }
 
 func (g *GraphREST) Kind() string { return v1alpha1.KindScanGraph }
@@ -151,7 +156,7 @@ func (g *GraphREST) Get(ctx context.Context, name string, _ url.Values) (any, er
 
 // SBOMREST serves scans/{name}/sbom?format=cyclonedx|spdx as a download.
 type SBOMREST struct {
-	reports *report.Store
+	reports report.Reader
 }
 
 func (s *SBOMREST) Kind() string { return "SBOM" }

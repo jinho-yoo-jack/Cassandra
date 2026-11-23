@@ -10,8 +10,8 @@ export interface ViewOptions {
   minSeverity: Severity;
 }
 
-export const NODE_WIDTH = 236;
-export const NODE_HEIGHT = 58;
+export const NODE_WIDTH = 264;
+export const NODE_HEIGHT = 96;
 
 /** maxSeverity of a node, considering only findings at or above min. */
 export function nodeSeverity(n: GraphNode, min: Severity): Severity | undefined {
@@ -68,12 +68,13 @@ export function visibleGraph(g: ScanGraph, o: ViewOptions): { nodes: GraphNode[]
   const keep = (n: GraphNode): boolean => {
     if (n.kind === "package" && !o.showCode) return false;
     if (n.dev && !o.showDev) return false;
+    if (o.view === "vulnerable") return nodeSeverity(n, o.minSeverity) !== undefined;
     switch (n.kind) {
       case "repository":
       case "project":
         return true;
       case "package":
-        return o.view !== "vulnerable" || onPath.has(n.id);
+        return true;
     }
     if (o.view === "all") return true;
     if (onPath.has(n.id)) return true;
@@ -92,13 +93,14 @@ function getElk() {
   return elk;
 }
 
-/** layout positions nodes left to right: repository → projects → code → libraries. */
-export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<Map<string, { x: number; y: number }>> {
+export type LayoutDirection = "RIGHT" | "DOWN";
+/** Overview runs left to right; selected paths can use a readable vertical chain. */
+export async function layout(nodes: GraphNode[], edges: GraphEdge[], direction: LayoutDirection = "RIGHT"): Promise<Map<string, { x: number; y: number }>> {
   const graph: ElkNode = {
     id: "root",
     layoutOptions: {
       "elk.algorithm": "layered",
-      "elk.direction": "RIGHT",
+      "elk.direction": direction,
       "elk.spacing.nodeNode": "18",
       "elk.layered.spacing.nodeNodeBetweenLayers": "90",
       "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",

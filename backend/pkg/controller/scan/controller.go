@@ -29,10 +29,20 @@ const (
 )
 
 // Controller reconciles Scans.
+type ScanService interface {
+	Scan(context.Context, string, v1alpha1.ScanSpec, scanner.Progress) (*report.Report, error)
+	Reevaluate(context.Context, *report.Report) (*report.Report, []string, error)
+}
+
+type ReportStore interface {
+	report.Reader
+	Put(string, *report.Report) error
+}
+
 type Controller struct {
 	scans   storage.Interface[*v1alpha1.Scan]
-	reports *report.Store
-	scanner *scanner.Scanner
+	reports ReportStore
+	scanner ScanService
 	queue   workqueue.TypedRateLimitingInterface[string]
 	log     *slog.Logger
 	index   *index
@@ -41,7 +51,7 @@ type Controller struct {
 var _ feeds.Sink = (*Controller)(nil)
 
 // NewController returns a controller.
-func NewController(scans storage.Interface[*v1alpha1.Scan], reports *report.Store, s *scanner.Scanner, log *slog.Logger) *Controller {
+func NewController(scans storage.Interface[*v1alpha1.Scan], reports ReportStore, s ScanService, log *slog.Logger) *Controller {
 	return &Controller{
 		scans: scans, reports: reports, scanner: s, log: log, index: newIndex(),
 		queue: workqueue.NewTypedRateLimitingQueueWithConfig(

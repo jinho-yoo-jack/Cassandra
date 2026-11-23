@@ -205,23 +205,32 @@ func within(dir, root string) bool {
 	return root == "." || dir == root || strings.HasPrefix(dir, root+"/")
 }
 
-// component returns the component ID for an ecosystem/name, preferring one
-// declared by the project's manifest.
+// component returns the component ID an import of ecosystem/name resolves
+// to. Package managers may install several copies of a package (npm nests
+// conflicting versions); source code of the project loads the copy the
+// project's manifest declares, so declared and direct copies win.
 func (r *resolver) component(eco inventory.Ecosystem, name string, proj *inventory.Project) (string, bool) {
 	cs := r.byName[string(eco)+"/"+name]
 	if len(cs) == 0 {
 		return "", false
 	}
-	if proj != nil {
-		for _, c := range cs {
-			for _, l := range c.Locations {
-				if l == proj.Manifest {
-					return c.ID, true
-				}
-			}
+	score := func(c *inventory.Component) int {
+		s := 0
+		if proj != nil && slices.Contains(c.Locations, proj.Manifest) {
+			s += 2
+		}
+		if c.Direct {
+			s++
+		}
+		return s
+	}
+	best := cs[0]
+	for _, c := range cs[1:] {
+		if score(c) > score(best) {
+			best = c
 		}
 	}
-	return cs[0].ID, true
+	return best.ID, true
 }
 
 // nearestPackage returns the deepest existing package directory at or above

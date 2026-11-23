@@ -31,6 +31,7 @@
 - **조치 파이프라인**: 브랜치 → 수정 → 테스트 시나리오 → 격리 테스트 → 검토 → 승인 → PR. 서버 이미지는 이미지 빌드 → 실행 테스트 → 배포가 추가됩니다.
 - **문서 자동 생성**: 조치마다 `docs/cve/<CVE>/vulnerability-details.md`, `remediation.md`, 결과가 포함된 `test-scenarios.md`를 브랜치에 커밋합니다.
 - **SBOM 우선**: 스캔 결과의 원본은 SBOM입니다. CycloneDX 1.6(취약점 포함)과 SPDX 2.3으로 내려받을 수 있습니다.
+- **서버 없는 CLI + GitHub Action**: 같은 분석 엔진으로 checkout 디렉터리를 검사합니다. 대상 코드를 실행하지 않고 JSON·Markdown·SBOM·SARIF를 만들며, CI 실패 정책을 명시적으로 적용합니다.
 - **Kubernetes 스타일 API**: `/apis/cassandra.io/v1alpha1` 리소스, list + watch, status 서브리소스, 컨트롤러 구조를 kube-apiserver를 따라 만들었습니다.
 
 ## 스크린샷
@@ -55,12 +56,25 @@ make run   # UI와 API 서버를 빌드해 http://127.0.0.1:8080 에서 함께 �
 
 http://127.0.0.1:8080 을 열고 `https://github.com/snyk-labs/nodejs-goof` 같은 저장소 주소를 넣어 분석을 시작합니다.
 
+### CLI와 GitHub Action
+
+검사만 필요하면 `backend/go.mod`의 Go 버전으로 CLI를 빌드합니다. 실행에는 Node.js·Docker·git·데이터베이스가 필요하지 않습니다.
+
+```sh
+make cli
+backend/bin/cassandra scan --path . --output-dir cassandra-results --fail-on high
+```
+
+종료 코드: **0** 정책 통과, **1** 차단 대상 취약점, **2** 불완전 검사 또는 운영 오류입니다. 심각도 미상도 활성화된 임계값에서 차단하며, `--fail-on none`으로 검사 오류를 숨길 수는 없습니다. 공개 취약점 API를 조회하지만 대상 저장소의 install/build/test 스크립트는 실행하지 않습니다.
+
+Linux X64/ARM64용 Composite Action은 별도 [cassandra-action](https://github.com/jinho-yoo-jack/cassandra-action) 저장소에서 관리합니다. 이 저장소의 정확한 CLI 릴리스 버전을 다운로드하고 체크섬을 검증해 실행하며, 보고서와 Job Summary를 제공합니다. 엔진을 복제하지 않고 자동 수정·PR 생성·배포도 하지 않습니다. [옵션·workflow 예시·릴리스 방법](docs/usage/cli-and-actions.md)을 참고하세요.
+
 ### 개발
 
 ```sh
 make dev-api   # API 서버 :8080
 make dev-web   # Vite 핫 리로드 :5173 (/apis 를 :8080 으로 프록시)
-make test      # go vet + go test -race + TypeScript 타입 검사
+make test      # Go vet/race(CLI 포함) + Node 동작 테스트 + 타입 검사
 ```
 
 ## 동작 방식
@@ -70,7 +84,9 @@ flowchart LR
   UI[Web UI] -- REST + SSE watch --> API[cassandra-apiserver]
   API --> SC[Scan controller]
   API --> RC[Remediation controller]
-  SC -- clone · extract · match --> R[(SBOM + 코드 그래프)]
+  SC -- clone --> Engine[공통 스캔 엔진]
+  CLI[CLI / GitHub Action] --> Engine
+  Engine -- extract · match --> R[(SBOM + 코드 그래프)]
   FS[Feed syncer<br/>OSV · NVD · KEV · GitHub 웹훅] -- 영향받는 패키지 --> SC
   RC -- 격리된 빌드·테스트 --> D[Docker]
   RC -- push · PR --> GH[GitHub]

@@ -7,16 +7,15 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/codegraph"
+
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/git"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/github"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/report"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb"
 )
 
 // Scanner produces reports.
@@ -24,7 +23,7 @@ type Scanner struct {
 	WorkDir     string
 	GitHubToken string
 	Extractors  []inventory.Extractor
-	Matcher     *vulndb.Matcher
+	Matcher     Matcher
 	Log         *slog.Logger
 	// CloneURL overrides the clone URL, used by tests to scan local repos.
 	CloneURL func(github.RepoRef) string
@@ -49,46 +48,29 @@ func (s *Scanner) Scan(ctx context.Context, name string, spec v1alpha1.ScanSpec,
 		cloneURL = s.CloneURL(ref)
 	}
 
-	dir := filepath.Join(s.WorkDir, "scans", name)
-	_ = os.RemoveAll(dir)
+	if err := os.MkdirAll(s.WorkDir, 0o700); err != nil {
+		return nil, err
+	}
+	dir, err := os.MkdirTemp(s.WorkDir, "scan-")
+	if err != nil {
+		return nil, err
+	}
 	defer os.RemoveAll(dir)
 
-	progress(fmt.Sprintf("Cloning %s", ref.HTMLURL()))
+	notify(progress, fmt.Sprintf("Cloning %s", ref.HTMLURL()))
 	_, cloned, err := git.Clone(ctx, dir, git.CloneOptions{URL: cloneURL, Ref: gitRef, Depth: 1, Token: s.GitHubToken})
 	if err != nil {
 		return nil, fmt.Errorf("clone: %w", err)
 	}
 
-	progress("Extracting dependencies (SBOM)")
-	fsys := os.DirFS(dir)
-	inv, err := inventory.Extract(ctx, fsys, s.Extractors, s.Log)
-	if err != nil {
-		return nil, fmt.Errorf("extract: %w", err)
-	}
-
-	progress("Analysing source imports")
-	code, err := codegraph.Build(ctx, fsys, inv, codegraph.DefaultOptions)
-	if err != nil {
-		return nil, fmt.Errorf("code graph: %w", err)
-	}
-
-	progress(fmt.Sprintf("Matching %d components against OSV and NVD", len(inv.Components)))
-	match, err := s.Matcher.Match(ctx, inv)
-	if err != nil {
-		return nil, fmt.Errorf("match: %w", err)
-	}
-
-	now := time.Now().UTC()
 	branch := cloned.Branch
 	if branch == "" {
 		branch = gitRef
 	}
-	return &report.Report{
-		Repository: v1alpha1.RepositoryInfo{
-			Owner: ref.Owner, Name: ref.Name, URL: ref.HTMLURL(), Branch: branch, Commit: cloned.Commit,
-		},
-		Inventory: inv, Code: code, Match: match, GeneratedAt: now, EvaluatedAt: now,
-	}, nil
+	engine := &Engine{Extractors: s.Extractors, Matcher: s.Matcher, Log: s.Log}
+	return engine.ScanDirectory(ctx, dir, v1alpha1.RepositoryInfo{
+		Owner: ref.Owner, Name: ref.Name, URL: ref.HTMLURL(), Branch: branch, Commit: cloned.Commit,
+	}, progress)
 }
 
 // Reevaluate re-matches a stored report's inventory and returns the updated
@@ -97,6 +79,12 @@ func (s *Scanner) Reevaluate(ctx context.Context, r *report.Report) (*report.Rep
 	match, err := s.Matcher.Match(ctx, r.Inventory)
 	if err != nil {
 		return nil, nil, err
+	}
+	// Re-matching cannot repair an incomplete inventory without re-extraction.
+	for _, warning := range r.Match.Warnings {
+		if strings.HasPrefix(warning, "inventory:") {
+			match.Warnings = append(match.Warnings, warning)
+		}
 	}
 	previous := map[string]bool{}
 	for _, f := range r.Match.Findings {

@@ -96,6 +96,9 @@ type Result struct {
 	Project      *Project
 	Components   []*Component
 	Dependencies []Dependency
+	// Warnings retain unresolved declarations without discarding valid data.
+	// The scan adapter carries these diagnostics into its completeness policy.
+	Warnings []string
 }
 
 // Component returns the component with the given ID, or nil.

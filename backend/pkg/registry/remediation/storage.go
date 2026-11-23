@@ -34,7 +34,7 @@ const resource = v1alpha1.ResourceRemediations
 type REST struct {
 	store   storage.Interface[*v1alpha1.Remediation]
 	scans   storage.Interface[*v1alpha1.Scan]
-	reports *report.Store
+	reports report.Reader
 }
 
 // Storage bundles the resource and its subresources.
@@ -46,7 +46,7 @@ type Storage struct {
 }
 
 // NewStorage returns the remediations storage.
-func NewStorage(store storage.Interface[*v1alpha1.Remediation], scans storage.Interface[*v1alpha1.Scan], reports *report.Store, layout workspace.Layout) Storage {
+func NewStorage(store storage.Interface[*v1alpha1.Remediation], scans storage.Interface[*v1alpha1.Scan], reports report.Reader, layout workspace.Layout) Storage {
 	return Storage{
 		Remediation: &REST{store: store, scans: scans, reports: reports},
 		Approval:    &ApprovalREST{store: store},

@@ -53,7 +53,7 @@ type VulnRef struct {
 }
 
 type batchResponse struct {
-	Results []struct {
+	Results []*struct {
 		Vulns         []VulnRef `json:"vulns"`
 		NextPageToken string    `json:"next_page_token"`
 	} `json:"results"`
@@ -69,6 +69,7 @@ func (c *Client) QueryBatch(ctx context.Context, queries []Query) ([][]VulnRef, 
 	}
 	pages := make([]Query, len(queries))
 	copy(pages, queries)
+	seenTokens := make(map[int]map[string]bool)
 
 	for len(pending) > 0 {
 		var next []int
@@ -88,8 +89,24 @@ func (c *Client) QueryBatch(ctx context.Context, queries []Query) ([][]VulnRef, 
 				return nil, fmt.Errorf("osv querybatch: got %d results for %d queries", len(resp.Results), len(chunk))
 			}
 			for j, i := range chunk {
-				out[i] = append(out[i], resp.Results[j].Vulns...)
-				if tok := resp.Results[j].NextPageToken; tok != "" {
+				result := resp.Results[j]
+				if result == nil {
+					return nil, fmt.Errorf("osv querybatch: null result for query %d", i)
+				}
+				for _, ref := range result.Vulns {
+					if ref.ID == "" {
+						return nil, fmt.Errorf("osv querybatch: missing advisory ID for query %d", i)
+					}
+				}
+				out[i] = append(out[i], result.Vulns...)
+				if tok := result.NextPageToken; tok != "" {
+					if tok == queries[i].PageToken || seenTokens[i][tok] {
+						return nil, fmt.Errorf("osv querybatch: repeated page token for query %d", i)
+					}
+					if seenTokens[i] == nil {
+						seenTokens[i] = make(map[string]bool)
+					}
+					seenTokens[i][tok] = true
 					pages[i].PageToken = tok
 					next = append(next, i)
 				}

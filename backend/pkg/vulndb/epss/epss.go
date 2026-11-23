@@ -3,6 +3,8 @@ package epss
 
 import (
 	"context"
+	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -72,18 +74,42 @@ func (c *Client) Scores(ctx context.Context, cves []string) (map[string]*v1alpha
 		if err := httpjson.Get(ctx, c.HTTP, c.URL+"?cve="+url.QueryEscape(strings.Join(chunk, ",")), nil, &resp); err != nil {
 			return out, err
 		}
+		if resp.Data == nil {
+			return out, fmt.Errorf("epss: missing data array")
+		}
+		// Validate a whole response before caching either scores or misses.
+		validated := make(map[string]*v1alpha1.EPSS, len(resp.Data))
+		for _, d := range resp.Data {
+			if strings.TrimSpace(d.CVE) == "" {
+				return out, fmt.Errorf("epss: missing CVE ID")
+			}
+			score, err := probability(d.EPSS)
+			if err != nil {
+				return out, fmt.Errorf("epss: %s score: %w", d.CVE, err)
+			}
+			pct, err := probability(d.Percentile)
+			if err != nil {
+				return out, fmt.Errorf("epss: %s percentile: %w", d.CVE, err)
+			}
+			validated[d.CVE] = &v1alpha1.EPSS{Score: score, Percentile: pct, Date: d.Date}
+		}
 		c.mu.Lock()
 		for _, id := range chunk {
 			c.cache[id] = cached{fetched: now} // remember misses too
 		}
-		for _, d := range resp.Data {
-			score, _ := strconv.ParseFloat(d.EPSS, 64)
-			pct, _ := strconv.ParseFloat(d.Percentile, 64)
-			e := &v1alpha1.EPSS{Score: score, Percentile: pct, Date: d.Date}
-			c.cache[d.CVE] = cached{score: e, fetched: now}
-			out[d.CVE] = e
+		for id, e := range validated {
+			c.cache[id] = cached{score: e, fetched: now}
+			out[id] = e
 		}
 		c.mu.Unlock()
 	}
 	return out, nil
+}
+
+func probability(raw string) (float64, error) {
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil || math.IsNaN(v) || v < 0 || v > 1 {
+		return 0, fmt.Errorf("invalid probability %q", raw)
+	}
+	return v, nil
 }

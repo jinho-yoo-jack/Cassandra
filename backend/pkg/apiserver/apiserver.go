@@ -12,6 +12,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apis/cassandra/v1alpha1"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/bootstrap"
 	remediationcontroller "github.com/jinho-yoo-jack/Cassandra/backend/pkg/controller/remediation"
 	scancontroller "github.com/jinho-yoo-jack/Cassandra/backend/pkg/controller/scan"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/deploy"
@@ -26,7 +27,7 @@ import (
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/rest"
 	scanregistry "github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/scan"
 	vulnregistry "github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/vulnerability"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/report"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/reportstore"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/runner"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/scanner"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/server"
@@ -140,9 +141,10 @@ func (c CompletedConfig) New() (*CassandraServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	reports := report.NewStore(reportBlobs)
+	reports := reportstore.New(reportBlobs)
 	cache := vulndb.NewCache(vulnBlobs)
-	matcher := &vulndb.Matcher{OSV: x.OSV, NVD: x.NVD, KEV: x.KEV, EPSS: x.EPSS, Cache: cache, Log: log}
+	scanRuntime := &bootstrap.ScanRuntime{OSV: x.OSV, NVD: x.NVD, KEV: x.KEV, EPSS: x.EPSS, Extractors: x.Extractors}
+	matcher := scanRuntime.Matcher(cache, log)
 	layout := workspace.Layout{Root: x.DataDir}
 
 	sc := &scanner.Scanner{

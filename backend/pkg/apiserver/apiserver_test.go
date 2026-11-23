@@ -118,10 +118,10 @@ func newFakes(t *testing.T) *fakes {
 	})
 	mux.HandleFunc("GET /nvd", func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.RawQuery, "f5%3Anginx%3A1.25.3") {
-			w.Write([]byte(`{"totalResults":0,"vulnerabilities":[]}`))
+			w.Write([]byte(`{"resultsPerPage":0,"startIndex":0,"totalResults":0,"vulnerabilities":[]}`))
 			return
 		}
-		w.Write([]byte(`{"totalResults":1,"vulnerabilities":[{"cve":{"id":"CVE-2024-7347","descriptions":[{"lang":"en","value":"nginx mp4 flaw."}],
+		w.Write([]byte(`{"resultsPerPage":1,"startIndex":0,"totalResults":1,"vulnerabilities":[{"cve":{"id":"CVE-2024-7347","descriptions":[{"lang":"en","value":"nginx mp4 flaw."}],
 			"metrics":{"cvssMetricV31":[{"type":"Primary","cvssData":{"version":"3.1","vectorString":"CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:N/I:N/A:H","baseScore":4.7}}]},
 			"configurations":[{"nodes":[{"cpeMatch":[{"vulnerable":true,"criteria":"cpe:2.3:a:f5:nginx:*:*:*:*:*:*:*:*","versionStartIncluding":"1.5.13","versionEndExcluding":"1.27.1"}]}]}]}}]}`))
 	})

@@ -5,6 +5,7 @@ package javascript
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path"
 	"strings"
 
@@ -71,6 +72,7 @@ func (Extractor) Extract(ctx context.Context, in *inventory.Input) (*inventory.R
 			return nil, err
 		}
 		proj.Lockfile = lp
+		b.checkDeclared(&pkg)
 		return b.result(), nil
 	}
 
@@ -78,14 +80,14 @@ func (Extractor) Extract(ctx context.Context, in *inventory.Input) (*inventory.R
 	// workspace root; reporting it again from ranges would only add noise.
 	for dir := path.Dir(in.Dir()); dir != "." && dir != "/"; dir = path.Dir(dir) {
 		for _, l := range locks {
-			if in.Exists(path.Join(dir, l.file)) {
-				return nil, nil
+			if lp := path.Join(dir, l.file); in.Exists(lp) {
+				return checkAncestorLock(in, lp, l.parse, &pkg, proj)
 			}
 		}
 	}
 	for _, l := range locks {
 		if in.Dir() != "." && in.Exists(l.file) {
-			return nil, nil
+			return checkAncestorLock(in, l.file, l.parse, &pkg, proj)
 		}
 	}
 
@@ -93,6 +95,10 @@ func (Extractor) Extract(ctx context.Context, in *inventory.Input) (*inventory.R
 	b := newBuilder(proj, in.Path)
 	addRanges := func(deps map[string]string, dev bool) {
 		for n, r := range deps {
+			if localDependency(r) {
+				continue
+			}
+			b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("dependency %s has no lockfile-resolved version; declared range fallback is incomplete", n))
 			if v := inventory.VersionFromRange(r); v != "" {
 				b.addDirect(n, v, dev)
 			}
@@ -102,6 +108,23 @@ func (Extractor) Extract(ctx context.Context, in *inventory.Input) (*inventory.R
 	addRanges(pkg.OptionalDependencies, false)
 	addRanges(pkg.DevDependencies, true)
 	return b.result(), nil
+}
+
+// checkAncestorLock verifies a workspace member before suppressing duplicates.
+func checkAncestorLock(in *inventory.Input, lp string, parse lockParser, pkg *packageJSON, proj *inventory.Project) (*inventory.Result, error) {
+	data, err := in.ReadFile(lp)
+	if err != nil {
+		return nil, err
+	}
+	b := newBuilder(proj, in.Path)
+	if err := parse(data, pkg, b); err != nil {
+		return nil, fmt.Errorf("%s: %w", lp, err)
+	}
+	b.checkDeclared(pkg)
+	if len(b.res.Warnings) == 0 {
+		return nil, nil
+	}
+	return &inventory.Result{Project: proj, Warnings: b.res.Warnings}, nil
 }
 
 // builder accumulates components and edges for one project.
@@ -140,10 +163,35 @@ func (b *builder) addDirect(name, version string, dev bool) *inventory.Component
 }
 
 func (b *builder) edge(from, to string) {
+	if from == "" || to == "" {
+		return
+	}
 	b.res.Dependencies = append(b.res.Dependencies, inventory.Dependency{From: from, To: to})
 }
 
 func (b *builder) result() *inventory.Result { return b.res }
+
+func localDependency(spec string) bool {
+	return strings.HasPrefix(spec, "workspace:") || strings.HasPrefix(spec, "file:") || strings.HasPrefix(spec, "link:")
+}
+
+func (b *builder) checkDeclared(pkg *packageJSON) {
+	for name, spec := range merge(pkg.Dependencies, pkg.OptionalDependencies, pkg.DevDependencies) {
+		if localDependency(spec) {
+			continue
+		}
+		found := false
+		for _, c := range b.res.Components {
+			if c.Name == name && c.Version != "" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			b.res.Warnings = append(b.res.Warnings, fmt.Sprintf("declared dependency %s is not resolved by the lockfile", name))
+		}
+	}
+}
 
 // cleanVersion strips pnpm peer suffixes such as "1.0.0(react@19.0.0)".
 func cleanVersion(v string) string {

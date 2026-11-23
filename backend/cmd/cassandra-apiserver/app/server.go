@@ -17,17 +17,14 @@ import (
 
 	"github.com/jinho-yoo-jack/Cassandra/backend/cmd/cassandra-apiserver/app/options"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/apiserver"
+	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/bootstrap"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/deploy"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/git"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/github"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory/extractor/all"
+
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/runner"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/server"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/storage/boltstore"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/epss"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/kev"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/nvd"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb/osv"
 )
 
 // NewAPIServerCommand creates the root command.
@@ -100,6 +97,7 @@ func Run(ctx context.Context, opts options.CompletedOptions) error {
 
 // CreateServerConfig turns options into the server configuration.
 func CreateServerConfig(opts options.CompletedOptions, db *bolt.DB, log *slog.Logger) *apiserver.Config {
+	scan := bootstrap.NewScan(bootstrap.ScanOptions{NVDAPIKey: opts.Feeds.NVDAPIKey, GoProxy: opts.Feeds.GoProxy})
 	var r runner.Runner = runner.NewDocker()
 	if opts.Remediation.Runner == "local" {
 		r = runner.Local{}
@@ -112,8 +110,8 @@ func CreateServerConfig(opts options.CompletedOptions, db *bolt.DB, log *slog.Lo
 		},
 		ExtraConfig: apiserver.ExtraConfig{
 			DB: db, DataDir: opts.Storage.DataDir,
-			OSV: osv.NewClient(), NVD: nvd.NewClient(opts.Feeds.NVDAPIKey), KEV: kev.NewCatalog(), EPSS: epss.NewClient(),
-			Extractors: all.Extractors(all.Options{GoProxy: opts.Feeds.GoProxy}),
+			OSV: scan.OSV, NVD: scan.NVD, KEV: scan.KEV, EPSS: scan.EPSS,
+			Extractors: scan.Extractors,
 			Runner:     r, Docker: docker, Toolchains: opts.Toolchains,
 			GitHub:   github.NewClient(opts.GitHub.Token),
 			Author:   git.Signature{Name: opts.Remediation.AuthorName, Email: opts.Remediation.AuthorEmail},

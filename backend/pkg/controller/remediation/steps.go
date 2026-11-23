@@ -18,7 +18,6 @@ import (
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/inventory/extractor/container"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/registry/generic"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/report"
-	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/version"
 	"github.com/jinho-yoo-jack/Cassandra/backend/pkg/vulndb"
 )
 
@@ -31,12 +30,12 @@ type stepContext struct {
 	finding v1alpha1.Finding
 	repoRef github.RepoRef
 	dir     string
-	repo    *git.Repo
+	repo    workingCopy
 	// status is a copy the step may modify; produced fields are persisted.
 	status *v1alpha1.RemediationStatus
 }
 
-func (c *Controller) loadContext(ctx context.Context, rem *v1alpha1.Remediation) (*stepContext, error) {
+func (c *stepExecutor) loadContext(ctx context.Context, rem *v1alpha1.Remediation) (*stepContext, error) {
 	rep, err := c.Reports.Get(rem.Spec.ScanName)
 	if err != nil {
 		return nil, fmt.Errorf("report of scan %s: %w", rem.Spec.ScanName, err)
@@ -53,19 +52,19 @@ func (c *Controller) loadContext(ctx context.Context, rem *v1alpha1.Remediation)
 		rem: rem, report: rep, comp: comp, finding: finding,
 		vuln:    rep.Match.Vulnerabilities[finding.VulnerabilityID],
 		repoRef: github.RepoRef{Owner: rep.Repository.Owner, Name: rep.Repository.Name},
-		dir:     dir, repo: git.Open(dir, c.GitHub.Token), status: &status,
+		dir:     dir, repo: git.Open(dir, c.gitToken), status: &status,
 	}, nil
 }
 
-func (c *Controller) cloneURL(ref github.RepoRef) string {
+func (c *stepExecutor) cloneURL(ref github.RepoRef) string {
 	if c.CloneURL != nil {
 		return c.CloneURL(ref)
 	}
 	return ref.CloneURL()
 }
 
-// targetVersion is the spec override, or the highest fixed version among the
-// component's findings so one bump resolves all of them.
+// targetVersion is the spec override, or report.FixTarget, which the graph
+// also shows on the fix button.
 func targetVersion(sc *stepContext) string {
 	if t := sc.rem.Spec.TargetVersion; t != "" {
 		return t
@@ -73,13 +72,7 @@ func targetVersion(sc *stepContext) string {
 	if sc.finding.FixedVersion == "" {
 		return ""
 	}
-	target := sc.finding.FixedVersion
-	for _, f := range sc.report.FindingsFor(sc.comp.ID) {
-		if f.FixedVersion != "" && version.Less(string(sc.comp.Ecosystem), strings.TrimPrefix(target, "v"), strings.TrimPrefix(f.FixedVersion, "v")) {
-			target = f.FixedVersion
-		}
-	}
-	return target
+	return sc.report.FixTarget(sc.comp.ID)
 }
 
 // imagesRunning returns the container components a fix must rewrite.
@@ -103,12 +96,12 @@ func imagesRunning(r *report.Report, c *inventory.Component) []*inventory.Compon
 // CreateBranch
 // ---------------------------------------------------------------------------
 
-func (c *Controller) createBranch(ctx context.Context, sc *stepContext) stepOutcome {
+func (c *stepExecutor) createBranch(ctx context.Context, sc *stepContext) StepResult {
 	if err := os.RemoveAll(sc.dir); err != nil {
 		return fatal(err, "")
 	}
 	repo, _, err := git.Clone(ctx, sc.dir, git.CloneOptions{
-		URL: c.cloneURL(sc.repoRef), Ref: sc.status.BaseCommit, Depth: 1, Token: c.GitHub.Token,
+		URL: c.cloneURL(sc.repoRef), Ref: sc.status.BaseCommit, Depth: 1, Token: c.gitToken,
 	})
 	if err != nil {
 		return fatal(err, "")
@@ -128,7 +121,7 @@ func short(s string) string { return s[:min(len(s), 12)] }
 // ApplyFix
 // ---------------------------------------------------------------------------
 
-func (c *Controller) applyFix(ctx context.Context, sc *stepContext) stepOutcome {
+func (c *stepExecutor) applyFix(ctx context.Context, sc *stepContext) StepResult {
 	target := targetVersion(sc)
 	if target == "" {
 		return fatal(fmt.Errorf("%s에 대한 패치 버전이 아직 없습니다 — 수동 완화 조치가 필요합니다", sc.vuln.DisplayID()), "")
@@ -161,11 +154,11 @@ func (c *Controller) applyFix(ctx context.Context, sc *stepContext) stepOutcome 
 	}
 	sc.status.ToVersion = target
 	out := succeeded(res.Summary)
-	out.log = res.Log + "\n\nChanged files:\n" + strings.Join(changed, "\n")
+	out.Log = res.Log + "\n\nChanged files:\n" + strings.Join(changed, "\n")
 	return out
 }
 
-func (c *Controller) tagExists(ctx context.Context, ref string) bool {
+func (c *stepExecutor) tagExists(ctx context.Context, ref string) bool {
 	_, err := c.Docker.Exec(ctx, "manifest", "inspect", ref)
 	return err == nil
 }
@@ -174,7 +167,7 @@ func (c *Controller) tagExists(ctx context.Context, ref string) bool {
 // WriteTestScenarios
 // ---------------------------------------------------------------------------
 
-func (c *Controller) docData(ctx context.Context, sc *stepContext) *docData {
+func (c *stepExecutor) docData(ctx context.Context, sc *stepContext) *docData {
 	changed, _ := sc.repo.ChangedFiles(ctx, sc.status.BaseCommit)
 	var fixSummary string
 	if st := sc.rem.Status.Step(v1alpha1.StepApplyFix); st != nil {
@@ -222,7 +215,7 @@ func vulndbPath(sc *stepContext) string {
 	return strings.Join(labels, " → ")
 }
 
-func (c *Controller) writeTestScenarios(ctx context.Context, sc *stepContext) stepOutcome {
+func (c *stepExecutor) writeTestScenarios(ctx context.Context, sc *stepContext) StepResult {
 	paths, err := writeDocs(sc.dir, c.docData(ctx, sc), DocVulnerabilityDetails, DocRemediation, DocTestScenarios)
 	if err != nil {
 		return fatal(err, "")
@@ -240,7 +233,7 @@ func isDockerfile(p string) bool {
 	return b == "Dockerfile" || b == "Containerfile" || strings.HasPrefix(b, "Dockerfile.") || strings.HasSuffix(b, ".Dockerfile")
 }
 
-func (c *Controller) buildImage(ctx context.Context, sc *stepContext) stepOutcome {
+func (c *stepExecutor) buildImage(ctx context.Context, sc *stepContext) StepResult {
 	var dockerfile string
 	for _, img := range imagesRunning(sc.report, sc.comp) {
 		for _, loc := range img.Locations {
@@ -257,10 +250,10 @@ func (c *Controller) buildImage(ctx context.Context, sc *stepContext) stepOutcom
 		out, err := c.Docker.Exec(ctx, args...)
 		if err != nil {
 			// Not fatal: the runtime scenarios report the failure for review.
-			return stepOutcome{state: v1alpha1.StepFailed, message: "이미지 빌드 실패: " + err.Error(), log: out}
+			return StepResult{State: v1alpha1.StepFailed, Message: "이미지 빌드 실패: " + err.Error(), Log: out}
 		}
 		sc.status.Image = tag
-		return stepOutcome{state: v1alpha1.StepSucceeded, message: fmt.Sprintf("%s 로 이미지 %s 빌드", dockerfile, tag), log: out}
+		return StepResult{State: v1alpha1.StepSucceeded, Message: fmt.Sprintf("%s 로 이미지 %s 빌드", dockerfile, tag), Log: out}
 	}
 
 	// The image is only referenced (compose, Kubernetes): pull the new tag.
@@ -278,12 +271,12 @@ func (c *Controller) buildImage(ctx context.Context, sc *stepContext) stepOutcom
 		ref := container.String(img.Image)
 		out, err := c.Docker.Exec(ctx, "pull", ref)
 		if err != nil {
-			return stepOutcome{state: v1alpha1.StepFailed, message: "이미지 pull 실패: " + err.Error(), log: out}
+			return StepResult{State: v1alpha1.StepFailed, Message: "이미지 pull 실패: " + err.Error(), Log: out}
 		}
 		sc.status.Image = ref
-		return stepOutcome{state: v1alpha1.StepSucceeded, message: "Dockerfile이 없어 수정된 이미지 " + ref + " 를 pull", log: out}
+		return StepResult{State: v1alpha1.StepSucceeded, Message: "Dockerfile이 없어 수정된 이미지 " + ref + " 를 pull", Log: out}
 	}
-	return stepOutcome{state: v1alpha1.StepFailed, message: "수정된 이미지 참조를 찾을 수 없습니다"}
+	return StepResult{State: v1alpha1.StepFailed, Message: "수정된 이미지 참조를 찾을 수 없습니다"}
 }
 
 func firstImageRepo(sc *stepContext) string {
@@ -297,7 +290,7 @@ func firstImageRepo(sc *stepContext) string {
 // Test
 // ---------------------------------------------------------------------------
 
-func (c *Controller) test(ctx context.Context, sc *stepContext) stepOutcome {
+func (c *stepExecutor) test(ctx context.Context, sc *stepContext) StepResult {
 	// Commit the fix and the scenarios first, so build artefacts created by
 	// the tests (node_modules, target/) can never be committed.
 	msg := fmt.Sprintf("fix(security): bump %s %s → %s (%s)\n\n%s\n\nGenerated by cassandra",
@@ -332,7 +325,7 @@ func (c *Controller) test(ctx context.Context, sc *stepContext) stepOutcome {
 	}
 	v1alpha1.SetCondition(&sc.status.Conditions, cond)
 	if !passed {
-		return stepOutcome{state: v1alpha1.StepFailed, message: fmt.Sprintf("%d개 시나리오 실패 (%s) — 검토 필요", len(failed), strings.Join(failed, ", "))}
+		return StepResult{State: v1alpha1.StepFailed, Message: fmt.Sprintf("%d개 시나리오 실패 (%s) — 검토 필요", len(failed), strings.Join(failed, ", "))}
 	}
 	return succeeded(fmt.Sprintf("%d개 시나리오 통과", len(results)))
 }
@@ -346,7 +339,7 @@ func testsPassed(s *v1alpha1.RemediationStatus) bool {
 // Deploy
 // ---------------------------------------------------------------------------
 
-func (c *Controller) deploy(ctx context.Context, sc *stepContext) stepOutcome {
+func (c *stepExecutor) deploy(ctx context.Context, sc *stepContext) StepResult {
 	switch {
 	case !testsPassed(sc.status):
 		return skipped("테스트 실패로 배포하지 않음")
@@ -361,7 +354,7 @@ func (c *Controller) deploy(ctx context.Context, sc *stepContext) stepOutcome {
 	}
 	sc.status.Image = ref
 	out := succeeded("배포 완료: " + ref)
-	out.log = log
+	out.Log = log
 	return out
 }
 
@@ -369,11 +362,11 @@ func (c *Controller) deploy(ctx context.Context, sc *stepContext) stepOutcome {
 // PullRequest
 // ---------------------------------------------------------------------------
 
-func (c *Controller) pullRequest(ctx context.Context, sc *stepContext) stepOutcome {
+func (c *stepExecutor) pullRequest(ctx context.Context, sc *stepContext) StepResult {
 	if sc.status.BaseBranch == "" {
 		return fatal(fmt.Errorf("스캔 기준이 브랜치가 아니어서(태그/커밋) PR을 만들 수 없습니다. 브랜치 %s 는 로컬(%s)에 있습니다", sc.status.Branch, sc.dir), "")
 	}
-	if c.GitHub.Token == "" {
+	if c.gitToken == "" {
 		return fatal(fmt.Errorf("GitHub 토큰이 없어 push/PR을 할 수 없습니다(--github-token). 브랜치 %s 는 로컬(%s)에 있습니다", sc.status.Branch, sc.dir), "")
 	}
 	if err := sc.repo.Push(ctx, sc.status.Branch); err != nil {
@@ -401,6 +394,6 @@ func (c *Controller) pullRequest(ctx context.Context, sc *stepContext) stepOutco
 }
 
 // matchNew re-matches one component of the re-extracted inventory.
-func (c *Controller) matchNew(ctx context.Context, inv *inventory.Inventory, comp *inventory.Component) (*vulndb.Result, error) {
+func (c *stepExecutor) matchNew(ctx context.Context, inv *inventory.Inventory, comp *inventory.Component) (*vulndb.Result, error) {
 	return c.Matcher.MatchComponents(ctx, inv, []string{comp.ID})
 }

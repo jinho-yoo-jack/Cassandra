@@ -1,0 +1,55 @@
+name: Release CLI
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - run: go vet ./... && go test -race -timeout 5m ./...
+        working-directory: backend
+      - name: Validate packaging script
+        run: bash -n scripts/release.sh
+      - name: Test package verification refusals
+        run: python3 -B -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Build versioned release artifacts
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+          TMPDIR: ${{ runner.temp }}
+        run: bash scripts/release.sh "$RELEASE_VERSION" dist
+      - name: Check archive integrity
+        run: sha256sum --check checksums.txt
+        working-directory: dist
+      - name: Check release contents
+        run: python3 scripts/verify_release.py dist
+      - name: Exercise packaged CLI before publication
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+          PACKAGE_DIR: ${{ runner.temp }}/cassandra-release-smoke
+        run: |
+          mkdir -p "$PACKAGE_DIR"
+          tar -xzf "dist/cassandra_${RELEASE_VERSION}_linux_amd64.tar.gz" -C "$PACKAGE_DIR"
+          python3 scripts/smoke_scan.py "$PACKAGE_DIR/cassandra"
+      - name: Publish only for the explicitly pushed tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          notes="docs/releases/${RELEASE_VERSION}.md"
+          if [[ -f "$notes" ]]; then
+            gh release create "$RELEASE_VERSION" dist/* --verify-tag --draft=false --prerelease=false --latest --notes-file "$notes"
+          else
+            gh release create "$RELEASE_VERSION" dist/* --verify-tag --draft=false --prerelease=false --latest --generate-notes
+          fi

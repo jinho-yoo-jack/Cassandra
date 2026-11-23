@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -39,9 +40,9 @@ func NewClient(apiKey string) *Client {
 }
 
 type response struct {
-	ResultsPerPage  int `json:"resultsPerPage"`
-	StartIndex      int `json:"startIndex"`
-	TotalResults    int `json:"totalResults"`
+	ResultsPerPage  *int `json:"resultsPerPage"`
+	StartIndex      *int `json:"startIndex"`
+	TotalResults    *int `json:"totalResults"`
 	Vulnerabilities []struct {
 		CVE CVE `json:"cve"`
 	} `json:"vulnerabilities"`
@@ -163,6 +164,8 @@ func (c *Client) paginate(ctx context.Context, query string, fn func(CVE) error)
 		out   []CVE
 		start int
 	)
+	total := -1
+	seen := map[string]bool{}
 	header := http.Header{}
 	if c.APIKey != "" {
 		header.Set("apiKey", c.APIKey)
@@ -176,6 +179,10 @@ func (c *Client) paginate(ctx context.Context, query string, fn func(CVE) error)
 		if err := httpjson.Get(ctx, c.HTTP, u, header, &resp); err != nil {
 			return nil, fmt.Errorf("nvd: %w", err)
 		}
+		if err := resp.validate(start, total, seen); err != nil {
+			return nil, fmt.Errorf("nvd: %w", err)
+		}
+		total = *resp.TotalResults
 		for _, v := range resp.Vulnerabilities {
 			if fn != nil {
 				if err := fn(v.CVE); err != nil {
@@ -186,8 +193,31 @@ func (c *Client) paginate(ctx context.Context, query string, fn func(CVE) error)
 			out = append(out, v.CVE)
 		}
 		start += len(resp.Vulnerabilities)
-		if len(resp.Vulnerabilities) == 0 || start >= resp.TotalResults {
+		if start == total {
 			return out, nil
 		}
 	}
+}
+
+// Validate the entire page before publishing records or treating an empty page
+// as evidence of no vulnerabilities. Metadata and IDs must account for every
+// result, including on subsequent pages.
+func (r *response) validate(start, total int, seen map[string]bool) error {
+	if r.ResultsPerPage == nil || r.StartIndex == nil || r.TotalResults == nil || r.Vulnerabilities == nil {
+		return fmt.Errorf("incomplete response: missing pagination fields or vulnerabilities array")
+	}
+	count := len(r.Vulnerabilities)
+	if *r.StartIndex != start || *r.TotalResults < start || (total >= 0 && *r.TotalResults != total) {
+		return fmt.Errorf("inconsistent pagination: startIndex=%d totalResults=%d, expected start=%d total=%d", *r.StartIndex, *r.TotalResults, start, total)
+	}
+	if *r.ResultsPerPage != count || count > 2000 || count > *r.TotalResults-start || (count == 0 && start < *r.TotalResults) {
+		return fmt.Errorf("incomplete page: startIndex=%d resultsPerPage=%d records=%d totalResults=%d", start, *r.ResultsPerPage, count, *r.TotalResults)
+	}
+	for _, v := range r.Vulnerabilities {
+		if strings.TrimSpace(v.CVE.ID) == "" || seen[v.CVE.ID] {
+			return fmt.Errorf("invalid or duplicate CVE ID %q", v.CVE.ID)
+		}
+		seen[v.CVE.ID] = true
+	}
+	return nil
 }
