@@ -121,7 +121,7 @@ SARIF를 GitHub Security 탭에 올리려면 해당 job에 `security-events: wri
           ((steps.cassandra.outcome == 'success' && steps.cassandra.outputs.exit-code == '0') ||
           (steps.cassandra.outcome == 'failure' && steps.cassandra.outputs.exit-code == '1')) &&
           (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: github/codeql-action/upload-sarif@800a1d8701a65d150a672fef0923dbf2660a62ec # v4
+        uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4
         with:
           sarif_file: ${{ steps.cassandra.outputs.sarif-file }}
           category: cassandra
